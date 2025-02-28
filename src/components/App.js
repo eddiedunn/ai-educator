@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Container, Alert, Button, Spinner } from 'react-bootstrap'
 import { ethers } from 'ethers'
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Web3ReactProvider } from '@web3-react/core';
+import { metaMask, metaMaskHooks } from '../utils/connectors';
 
 // Components
 import Navigation from './Navigation';
@@ -25,6 +27,13 @@ const USER_ADDRESS = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
 // These should ideally come from a config file or environment variables
 const PUZZLE_POINTS_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Deployed PuzzlePoints address
 const QUESTION_MANAGER_ADDRESS = '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0'; // Deployed QuestionManager address
+
+// Function to get the ethers library from a provider
+function getLibrary(provider) {
+  const library = new ethers.providers.Web3Provider(provider);
+  library.pollingInterval = 12000;
+  return library;
+}
 
 function App() {
   const [account, setAccount] = useState(null)
@@ -631,11 +640,11 @@ function App() {
     <Container>
       <Navigation account={account} userRole={userRole} tokenBalance={tokenBalance} />
 
-      {!account && !isLoading && (
-        <Alert variant="info" className="mt-3">
+      {!account && (
+        <Alert variant="primary" className="mt-4">
           <Alert.Heading>Connect Your Wallet</Alert.Heading>
-          <p>You need to connect MetaMask to use this application.</p>
-          <div className="d-flex gap-2">
+          <p>Please connect your wallet to use the dApp.</p>
+          <div className="d-grid gap-2 mb-3">
             <Button 
               variant="primary" 
               onClick={() => {
@@ -648,29 +657,8 @@ function App() {
                 }
               }}
             >
-              Connect MetaMask
+              Connect Wallet
             </Button>
-            <Button 
-              variant="outline-primary" 
-              onClick={handleConnectToHardhat}
-            >
-              Connect to Hardhat
-            </Button>
-            <Button 
-              variant="success" 
-              onClick={handleImportHardhatAccount}
-            >
-              Import Admin Account
-            </Button>
-          </div>
-          <div className="mt-3 small text-muted">
-            <p>To connect to the Hardhat network manually:</p>
-            <ol className="text-start mb-0">
-              <li>Open MetaMask</li>
-              <li>Add a new network with RPC URL: http://127.0.0.1:8545</li>
-              <li>Chain ID: 31337</li>
-              <li>Currency Symbol: ETH</li>
-            </ol>
           </div>
         </Alert>
       )}
@@ -703,4 +691,11 @@ function App() {
   );
 }
 
-export default App;
+// Wrap the App component export with Web3ReactProvider
+export default function AppWithProvider() {
+  return (
+    <Web3ReactProvider connectors={[[metaMask, metaMaskHooks]]}>
+      <App />
+    </Web3ReactProvider>
+  );
+}

@@ -274,8 +274,5 @@ function chainlinkFunction(args) {
     });
 }
 
-// Export for Chainlink Functions
-module.exports = chainlinkFunction;
-
-// Export functions for direct use in the app
-export { evaluateWithOpenAI, mockEvaluateWithOpenAI }; 
+// Export everything using ES module syntax
+export { evaluateWithOpenAI, mockEvaluateWithOpenAI, chainlinkFunction, evaluateAnswers }; 

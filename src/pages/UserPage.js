@@ -89,32 +89,6 @@ const UserPage = ({ account, balance, tokenBalance, puzzlePoints, questionManage
     <>
       <h1 className="my-4 text-center">User Interface</h1>
       
-      {process.env.NODE_ENV === 'development' && (
-        <Alert variant="info" className="mb-3">
-          <Alert.Heading>Debugging Tools</Alert.Heading>
-          <p>These tools are only visible in development mode.</p>
-          <Button 
-            variant="outline-primary" 
-            onClick={handleCreateTestQuestionSet}
-            className="mb-2 me-2"
-          >
-            Run Question Set Diagnostics
-          </Button>
-          
-          <Button 
-            variant="outline-success" 
-            onClick={verifyContractReset}
-            className="mb-2"
-          >
-            Verify Contract Connection
-          </Button>
-          
-          <div className="small text-muted">
-            These buttons will run diagnostics on the question manager contract and display information in the console.
-          </div>
-        </Alert>
-      )}
-      
       <UserPanel account={account} balance={balance} tokenBalance={tokenBalance} puzzlePoints={puzzlePoints} />
       <AvailableQuestionSets questionManager={questionManager} />
     </>

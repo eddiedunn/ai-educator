@@ -1,25 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Button, Form, Alert, Spinner, ProgressBar } from 'react-bootstrap';
-import { retrieveQuestionSet, submitAnswersToBlockchain } from '../utils/answerStorage';
+import { Card, Button, Form, Alert, Spinner, ProgressBar, Container, Row, Col } from 'react-bootstrap';
+import { retrieveQuestionSet, submitAnswersToBlockchain, storeAnswers } from '../utils/answerStorage';
 import { debugLog, isDebugMode } from '../utils/debug';
 import { evaluateWithOpenAI } from '../utils/llmEvaluator';
+import { Link } from 'react-router-dom';
+import { metaMaskHooks } from '../utils/connectors';
+import { ethers } from 'ethers';
+import { activateInjectedConnector } from '../utils/connectors';
+
+const { useAccounts, useProvider, useChainId } = metaMaskHooks;
 
 const AssessmentPage = ({ questionManager }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [contentHash, setContentHash] = useState(null);
   const [answers, setAnswers] = useState({});
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [assessmentComplete, setAssessmentComplete] = useState(false);
+  const [message, setMessage] = useState(null);
   const [questionSetData, setQuestionSetData] = useState(null);
-  const [contentHash, setContentHash] = useState(null);
-  const [startingAssessment, setStartingAssessment] = useState(false);
+  
+  // Use metaMask hooks
+  const accounts = useAccounts();
+  const account = accounts?.[0];
+  const provider = useProvider();
+  const chainId = useChainId();
 
   useEffect(() => {
+    // Ensure wallet is connected
+    if (!account) {
+      activateInjectedConnector().then(success => {
+        if (!success) {
+          setError("Failed to connect wallet. Please connect your wallet manually.");
+        }
+      });
+    }
+
     if (!questionManager) {
       setError("Question Manager contract not connected");
       setLoading(false);
@@ -28,37 +49,24 @@ const AssessmentPage = ({ questionManager }) => {
 
     // Load the assessment data
     loadAssessment();
-  }, [questionManager, id]);
+  }, [questionManager, id, account]);
 
   const loadAssessment = async () => {
     try {
       setLoading(true);
       setError(null);
       debugLog(`Loading assessment for question set ID: ${id}`);
+      console.log('Starting to load assessment for question set ID:', id);
 
       // Get question set data from the contract
       const contractQuestionSet = await questionManager.questionSets(id);
       setQuestionSetData(contractQuestionSet);
       
       debugLog("Question set data from contract:", contractQuestionSet);
+      console.log('Contract question set data:', contractQuestionSet);
       
       if (!contractQuestionSet || !contractQuestionSet.active) {
         throw new Error("Question set not found or not active");
-      }
-
-      // Check if user already has an active assessment
-      try {
-        const userAddress = await questionManager.signer.getAddress();
-        const userAssessment = await questionManager.userAssessments(userAddress);
-        
-        // If the user doesn't have an active assessment, we'll need to request one
-        if (!userAssessment.active) {
-          debugLog("No active assessment found for user. Will request one during submission.");
-        } else {
-          debugLog("User has an active assessment:", userAssessment);
-        }
-      } catch (err) {
-        debugLog("Error checking user assessment:", err);
       }
 
       // Load question content from storage (IPFS in a real implementation)
@@ -67,9 +75,11 @@ const AssessmentPage = ({ questionManager }) => {
       debugLog("Question set content:", questionSet);
       debugLog("Content hash:", qsContentHash);
       debugLog(`Loaded ${questionSet.questions.length} questions`);
+      console.log('Loaded questions:', questionSet.questions);
       
       setQuestions(questionSet.questions);
       setContentHash(qsContentHash);
+      console.log('Setting loading to false');
       setLoading(false);
     } catch (error) {
       console.error("Error loading assessment:", error);
@@ -78,11 +88,15 @@ const AssessmentPage = ({ questionManager }) => {
     }
   };
 
-  const handleTextAnswerChange = (questionId, text) => {
-    setAnswers({
-      ...answers,
-      [questionId]: text
-    });
+  const handleReturnToMain = () => {
+    navigate('/');
+  };
+
+  const handleAnswerChange = (e, questionId) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: e.target.value
+    }));
   };
 
   const handleNextQuestion = () => {
@@ -91,7 +105,7 @@ const AssessmentPage = ({ questionManager }) => {
     }
   };
 
-  const handlePreviousQuestion = () => {
+  const handlePrevQuestion = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion(currentQuestion - 1);
     }
@@ -112,24 +126,6 @@ const AssessmentPage = ({ questionManager }) => {
         return;
       }
 
-      // Check if user has an active assessment or needs to request one
-      setStartingAssessment(true);
-      
-      try {
-        // Get user assessment status
-        const userAddress = await questionManager.signer.getAddress();
-        const userAssessment = await questionManager.userAssessments(userAddress);
-        
-        if (!userAssessment.active) {
-          debugLog("User has no active assessment. Requesting one...");
-          // Will be handled in submitAnswersToBlockchain
-        }
-      } catch (error) {
-        debugLog("Error checking assessment status:", error);
-      }
-      
-      setStartingAssessment(false);
-
       // Format answers into an array for submission
       const answerArray = questions.map((q) => ({
         questionId: q.id,
@@ -139,20 +135,58 @@ const AssessmentPage = ({ questionManager }) => {
       debugLog("Submitting free-text answers:", answerArray);
       debugLog(`Total questions: ${questions.length}, answers submitted: ${answerArray.length}`);
 
-      // Submit answers to the blockchain
+      // First store the answers to get a hash
       try {
-        await submitAnswersToBlockchain(questionManager, id, answerArray);
+        // Store answers and get the hash
+        const { answersHash } = await storeAnswers(id, answerArray);
+        debugLog("Generated answers hash:", answersHash);
+        
+        // Submit answer hash to the blockchain
+        await submitAnswersToBlockchain(questionManager, id, answersHash);
         debugLog("Answers submitted successfully");
         
         setAssessmentComplete(true);
+        setMessage({
+          type: 'success',
+          text: 'Your answers have been submitted successfully and are being evaluated. Results will be available soon!'
+        });
       } catch (error) {
         console.error("Error submitting to blockchain:", error);
         
-        // Check if it's the "No active assessment" error
-        if (error.message.includes("No active assessment")) {
-          setError("Failed to start assessment. Please try refreshing the page and starting again.");
+        if (error.message.includes('cancelled by user')) {
+          // User canceled the transaction
+          setMessage({
+            type: 'warning',
+            text: error.message || 'Transaction was cancelled. Please try again when you are ready to proceed.'
+          });
+        } else if (error.message.includes('already completed')) {
+          // User already completed this assessment
+          setMessage({
+            type: 'warning',
+            text: 'You have already completed this assessment. Please choose a different question set.'
+          });
+        } else if (error.message.includes('nonce') || error.message.includes('transaction') || error.message.includes('sync')) {
+          // Handle nonce errors with more detailed guidance
+          setMessage({
+            type: 'warning',
+            text: `Transaction nonce error: Your wallet is out of sync with the blockchain. Please try: 
+            1. Click the "Check Transaction Count" button below for diagnosis
+            2. Reset your wallet's account activity (Settings > Advanced)
+            3. Refresh this page and try again
+            4. If issues persist, please restart your browser and the Hardhat node`
+          });
+          
+          // Add a debug button if not already in debug mode
+          if (!isDebugMode()) {
+            console.error('Nonce error details:', error);
+            console.log('To resolve nonce issues, enable debug mode in .env (REACT_APP_ENABLE_DEBUG=true)');
+          }
         } else {
-          setError(`Blockchain submission failed: ${error.message}. Please try again.`);
+          // General error
+          setMessage({
+            type: 'error',
+            text: `Error submitting answers: ${error.message}`
+          });
         }
       }
       
@@ -190,10 +224,6 @@ const AssessmentPage = ({ questionManager }) => {
     }
   };
 
-  const handleReturnToMain = () => {
-    navigate('/');
-  };
-
   if (loading) {
     return (
       <div className="text-center my-5">
@@ -205,156 +235,144 @@ const AssessmentPage = ({ questionManager }) => {
 
   if (error) {
     return (
-      <Alert variant="danger" className="my-4">
-        <Alert.Heading>Error</Alert.Heading>
-        <p>{error}</p>
-        
-        {isDebugMode() && (
-          <div className="mt-3 border-top pt-2">
-            <h6 className="text-muted">Debug Information:</h6>
-            <ul className="small">
-              <li>Question Set ID: {id}</li>
-              <li>Content Hash: {contentHash ? `${contentHash.substring(0, 10)}...` : 'None'}</li>
-              <li>Questions Loaded: {questions.length}</li>
-              <li>Contract Connected: {questionManager ? 'Yes' : 'No'}</li>
-            </ul>
-            <p className="small text-muted">
-              Debug mode is enabled. Set REACT_APP_ENABLE_DEBUG=false in .env to disable.
-            </p>
+      <Container className="mt-4">
+        <Alert variant="danger" className="mb-4">
+          <strong>Error:</strong> {error}
+          <div className="mt-3">
+            <Button 
+              variant="outline-primary" 
+              as={Link} 
+              to="/"
+            >
+              Return to Dashboard
+            </Button>
           </div>
-        )}
-        
-        <div className="d-flex justify-content-end">
-          <Button variant="outline-danger" onClick={handleReturnToMain}>
-            Return to Dashboard
-          </Button>
-        </div>
-      </Alert>
+        </Alert>
+      </Container>
     );
   }
 
-  if (assessmentComplete) {
-    return (
-      <Card className="my-4">
-        <Card.Header as="h4" className="bg-success text-white">Assessment Complete</Card.Header>
-        <Card.Body className="text-center">
-          <Card.Title>Thank you for completing the assessment!</Card.Title>
-          <Card.Text>
-            Your answers have been submitted successfully. They will be evaluated by an AI system, and results will be processed on the blockchain.
-          </Card.Text>
-          <Card.Text className="text-muted">
-            The evaluation process may take a few minutes. You can check your results on the dashboard once processing is complete.
-          </Card.Text>
-          <Button variant="primary" onClick={handleReturnToMain}>
-            Return to Dashboard
-          </Button>
-        </Card.Body>
-      </Card>
-    );
-  }
-
+  // Main content
   return (
-    <div className="my-4">
-      <h2 className="mb-4">Assessment: Question Set #{id}</h2>
-      
-      {questionSetData && (
-        <div className="mb-4">
-          <p><strong>Questions:</strong> {questionSetData.questionCount.toString()}</p>
-          <Alert variant="info">
-            <Alert.Heading>Free-Form Assessment</Alert.Heading>
-            <p>
-              This assessment uses free-form text responses. Your answers will be evaluated by an AI system that analyzes your understanding of the concepts.
-            </p>
-            <p className="mb-0">
-              Please provide detailed, thoughtful responses to demonstrate your knowledge.
-            </p>
-          </Alert>
-        </div>
+    <Container className="mt-4">
+      {message && (
+        <Alert variant={message.type} className="mb-4">
+          {message.text}
+        </Alert>
       )}
-      
-      <ProgressBar 
-        now={(currentQuestion + 1) / questions.length * 100} 
-        label={`${currentQuestion + 1} of ${questions.length}`} 
-        className="mb-4" 
-      />
-      
-      {questions.length > 0 && (
+
+      {assessmentComplete ? (
         <Card>
-          <Card.Header as="h5">Question {currentQuestion + 1}</Card.Header>
           <Card.Body>
-            <Card.Text>{questions[currentQuestion].text}</Card.Text>
-            
-            <Form>
-              <Form.Group className="mb-3">
-                <Form.Control
-                  as="textarea"
-                  rows={5}
-                  placeholder="Enter your answer here..."
-                  value={answers[questions[currentQuestion].id] || ''}
-                  onChange={(e) => handleTextAnswerChange(questions[currentQuestion].id, e.target.value)}
-                />
-                <Form.Text className="text-muted">
-                  Your response will be evaluated by an AI system. Provide a thorough explanation to demonstrate your understanding.
-                </Form.Text>
-              </Form.Group>
-            </Form>
-            
-            <div className="d-flex justify-content-between mt-4">
-              <Button 
-                variant="secondary" 
-                onClick={handlePreviousQuestion}
-                disabled={currentQuestion === 0}
-              >
-                Previous
-              </Button>
-              
-              {/* Add test evaluation button when in debug mode */}
-              {isDebugMode() && (
-                <Button
-                  variant="info"
-                  onClick={handleTestEvaluation}
-                  disabled={submitting || !answers[questions[currentQuestion].id]}
-                >
-                  Test Evaluation
-                </Button>
-              )}
-              
-              {currentQuestion < questions.length - 1 ? (
-                <Button 
-                  variant="primary" 
-                  onClick={handleNextQuestion}
-                  disabled={!answers[questions[currentQuestion].id] || answers[questions[currentQuestion].id].trim() === ''}
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button 
-                  variant="success" 
-                  onClick={handleSubmitAssessment}
-                  disabled={submitting || !answers[questions[currentQuestion].id] || answers[questions[currentQuestion].id].trim() === ''}
-                >
-                  {submitting ? (
-                    <>
-                      <Spinner
-                        as="span"
-                        animation="border"
-                        size="sm"
-                        role="status"
-                        aria-hidden="true"
-                        className="me-2"
-                      />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit Assessment'
-                  )}
-                </Button>
-              )}
-            </div>
+            <Card.Title>Thank you for completing the assessment!</Card.Title>
+            {message && message.type === 'success' ? (
+              <Card.Text>
+                Your answers have been submitted successfully. They will be evaluated by an AI system, and results will be processed on the blockchain.
+              </Card.Text>
+            ) : (
+              <Card.Text>
+                {message ? message.text : 'Your answers have been submitted for processing.'}
+              </Card.Text>
+            )}
+            <Card.Text className="text-muted">
+              You may close this page and check your results later from the dashboard.
+            </Card.Text>
+            <Button variant="primary" as={Link} to="/">
+              Return to Dashboard
+            </Button>
           </Card.Body>
         </Card>
+      ) : (
+        <div className="my-4">
+          <h2 className="mb-4">Assessment: Question Set #{id}</h2>
+          
+          {questionSetData && (
+            <div className="mb-4">
+              <p><strong>Questions:</strong> {questionSetData.questionCount.toString()}</p>
+              <Alert variant="info">
+                <Alert.Heading>Free-Form Assessment</Alert.Heading>
+                <p>
+                  This assessment uses free-form text responses. Your answers will be evaluated by an AI system that analyzes your understanding of the concepts.
+                </p>
+                <p className="mb-0">
+                  Please provide detailed, thoughtful responses to demonstrate your knowledge.
+                </p>
+              </Alert>
+            </div>
+          )}
+          
+          <ProgressBar 
+            now={(currentQuestion + 1) / questions.length * 100} 
+            className="mb-4"
+            label={`Question ${currentQuestion + 1} of ${questions.length}`}
+          />
+          
+          {questions.length > 0 && (
+            <Card>
+              <Card.Body>
+                <Card.Title>Question {currentQuestion + 1}</Card.Title>
+                <Card.Text>{questions[currentQuestion].text}</Card.Text>
+                
+                <Form.Group className="mb-4">
+                  <Form.Control
+                    as="textarea"
+                    rows={5}
+                    placeholder="Enter your answer here..."
+                    value={answers[questions[currentQuestion].id] || ''}
+                    onChange={(e) => handleAnswerChange(e, questions[currentQuestion].id)}
+                    disabled={submitting}
+                  />
+                </Form.Group>
+                
+                <div className="d-flex justify-content-between">
+                  <Button 
+                    variant="outline-secondary" 
+                    onClick={handlePrevQuestion}
+                    disabled={currentQuestion === 0 || submitting}
+                  >
+                    Previous
+                  </Button>
+                  
+                  {/* Add test evaluation button when in debug mode */}
+                  {isDebugMode() && (
+                    <Button
+                      variant="info"
+                      onClick={handleTestEvaluation}
+                      disabled={submitting || !answers[questions[currentQuestion].id]}
+                    >
+                      Test Evaluation
+                    </Button>
+                  )}
+                  
+                  {currentQuestion < questions.length - 1 ? (
+                    <Button 
+                      variant="primary" 
+                      onClick={handleNextQuestion}
+                      disabled={submitting}
+                    >
+                      Next
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="success" 
+                      onClick={handleSubmitAssessment}
+                      disabled={submitting}
+                    >
+                      {submitting ? (
+                        <>
+                          <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />{' '}
+                          Submitting...
+                        </>
+                      ) : 'Submit Assessment'}
+                    </Button>
+                  )}
+                </div>
+              </Card.Body>
+            </Card>
+          )}
+        </div>
       )}
-    </div>
+    </Container>
   );
 };
 

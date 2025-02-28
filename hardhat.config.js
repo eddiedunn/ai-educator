@@ -21,6 +21,12 @@ module.exports = {
   },
   defaultNetwork: "localhost",
   networks: {
+    hardhat: {
+      mining: {
+        auto: false,       // disables auto-mining of every transaction
+        interval: 1000     // mines a new block every 5000ms (5 seconds)
+      }
+    },
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 31337

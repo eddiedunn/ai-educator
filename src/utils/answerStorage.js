@@ -122,56 +122,49 @@ export const retrieveQuestionSet = async (questionSetId) => {
   }
 };
 
-// Submit answers to the blockchain
-export const submitAnswersToBlockchain = async (questionManager, questionSetId, answers) => {
+// Helper function to submit answers to the blockchain
+export const submitAnswersToBlockchain = async (
+  questionManager,
+  questionSetId,
+  answerHashes
+) => {
   try {
-    debugLog('Starting answer submission process...');
+    if (!questionManager) throw new Error("No question manager contract available");
     
-    // First check if the user has an active assessment
-    let hasActiveAssessment = false;
-    try {
-      const userAssessment = await questionManager.userAssessments(await questionManager.signer.getAddress());
-      hasActiveAssessment = userAssessment.active;
-      debugLog('Assessment status check:', hasActiveAssessment ? 'Active' : 'Inactive');
-    } catch (error) {
-      debugLog('Error checking assessment status:', error);
-    }
+    console.log("Submitting answers in a single transaction...");
+    console.log("Question Set ID:", questionSetId);
+    console.log("Answer Hashes:", answerHashes);
+
+    // Set a reasonable gas limit
+    const gasLimit = 3000000;
     
-    // If no active assessment, try to request one
-    if (!hasActiveAssessment) {
-      debugLog('No active assessment found. Starting a new assessment...');
-      try {
-        const tx = await questionManager.startAssessment(questionSetId, {
-          gasLimit: 300000 // Explicit gas limit to bypass estimation issues
-        });
-        await tx.wait();
-        debugLog('Assessment started successfully!');
-      } catch (error) {
-        console.error('Error starting assessment:', error);
-        throw new Error(`Failed to start assessment: ${error.message}`);
+    // Let ethers.js handle the nonce automatically
+    const tx = await questionManager.submitAssessmentAnswers(
+      questionSetId,
+      answerHashes,
+      {
+        gasLimit
       }
-    }
+    );
     
-    // Store the answers and get the hash
-    const { answersHash } = await storeAnswers(questionSetId, answers);
+    console.log("Transaction sent, waiting for confirmation...");
+    const receipt = await tx.wait();
+    console.log("Transaction confirmed:", receipt);
     
-    // Now submit the hash to the blockchain
-    debugLog('Submitting answers hash:', answersHash);
-    debugLog('Using arrayify on hash...');
-    
-    // Add gas limit explicitly to avoid estimation issues
-    const tx = await questionManager.submitAnswers(ethers.utils.arrayify(answersHash), {
-      gasLimit: 300000 // Explicit gas limit to bypass estimation issues
-    });
-    await tx.wait();
-    
-    debugLog('Answers submitted to blockchain:', tx.hash);
     return {
-      transactionHash: tx.hash,
-      answersHash
+      txHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber
     };
   } catch (error) {
-    console.error('Error submitting answers to blockchain:', error);
-    throw new Error(`Failed to submit answers to blockchain: ${error.message}`);
+    console.error("Error submitting answers to blockchain:", error);
+    
+    // Provide more helpful error messages for common issues
+    if (error.code === 4001) {
+      throw new Error("Transaction rejected: You canceled the transaction.");
+    } else if (error.message.includes("insufficient funds")) {
+      throw new Error("Insufficient funds: Your wallet doesn't have enough ETH to cover gas fees.");
+    } else {
+      throw error; // Re-throw any other errors
+    }
   }
 }; 

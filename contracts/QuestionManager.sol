@@ -258,6 +258,46 @@ contract QuestionManager is Ownable {
         }
     }
     
+    /// @notice Start a new assessment and submit answers in a single transaction
+    /// @param questionSetId The ID of the question set to use
+    /// @param answersHash Hash of the answers JSON blob stored off-chain
+    function submitAssessmentAnswers(string memory questionSetId, bytes32 answersHash) public {
+        // Check if question set exists and is active
+        require(bytes(questionSets[questionSetId].setId).length > 0, "Question set does not exist");
+        require(questionSets[questionSetId].active, "Question set is not active");
+        require(answersHash != bytes32(0), "Answers hash cannot be empty");
+        
+        // Check if user already completed this assessment
+        UserAssessment storage assessment = userAssessments[msg.sender];
+        
+        // If user already has a completed assessment for this question set, prevent resubmission
+        if (bytes(assessment.questionSetId).length > 0 && 
+            keccak256(bytes(assessment.questionSetId)) == keccak256(bytes(questionSetId)) && 
+            assessment.completed) {
+            revert("You have already completed this assessment");
+        }
+        
+        // Reset assessment data
+        assessment.user = msg.sender;
+        assessment.questionSetId = questionSetId;
+        assessment.startTimestamp = block.timestamp;
+        assessment.answersHash = answersHash;
+        assessment.resultsHash = bytes32(0);
+        assessment.score = 0;
+        assessment.completionTimestamp = 0;
+        assessment.completed = false;
+        assessment.pendingVerificationId = bytes32(0);
+        
+        // Emit both events
+        emit AssessmentStarted(msg.sender, questionSetId, block.timestamp);
+        emit AnswersSubmitted(msg.sender, answersHash, block.timestamp);
+        
+        // If Chainlink Functions is enabled, automatically start verification
+        if (useChainlinkFunctions && address(answerVerifier) != address(0)) {
+            _startVerification(assessment);
+        }
+    }
+    
     /// @notice Manually trigger verification for the current assessment
     function triggerVerification() public {
         UserAssessment storage assessment = userAssessments[msg.sender];
@@ -308,7 +348,7 @@ contract QuestionManager is Ownable {
     /// @notice Internal function to check a pending verification
     function _checkPendingVerification(UserAssessment storage assessment) internal {
         // Get the verification result from the verifier contract
-        (bool fulfilled, bool passed, uint256 score, bytes32 resultsHash) = answerVerifier.checkVerification(
+        (bool fulfilled, bool unused, uint256 score, bytes32 resultsHash) = answerVerifier.checkVerification(
             assessment.pendingVerificationId
         );
         
