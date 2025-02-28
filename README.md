@@ -1,11 +1,11 @@
-# React Hardhat Template
+# AI Educator Platform
 
-A full-stack dApp template with React frontend and Hardhat for smart contract development.
+A full-stack dApp template with React frontend and Hardhat for smart contract development, featuring role-based access control.
 
 ## Quick Start
 
 ### Prerequisites
-- Node.js (v14+ recommended)
+- Node.js
 - npm or yarn
 - MetaMask browser extension
 
@@ -15,8 +15,6 @@ A full-stack dApp template with React frontend and Hardhat for smart contract de
 
 ```bash
 npm install
-# or 
-yarn install
 ```
 
 2. **Start local Hardhat node**
@@ -34,14 +32,9 @@ npx hardhat run scripts/deploy.js --network localhost
 
 4. **Start the React application**
 
-In a new terminal:
 ```bash
 npm start
-# or
-yarn start
 ```
-
-The application will open in your browser at http://localhost:3000
 
 ### Connect MetaMask to Local Hardhat Network
 
@@ -52,7 +45,16 @@ The application will open in your browser at http://localhost:3000
    - Chain ID: 31337
    - Currency Symbol: ETH
 
-3. Import an account using the private keys provided when you started the Hardhat node
+3. Import test accounts using the private keys provided when you started the Hardhat node
+
+### Testing User Roles
+
+The application has two roles with different interfaces:
+
+- **Admin Role**: Connect with wallet address `0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266`
+- **User Role**: Connect with wallet address `0x70997970c51812dc3a010c7d01b50e0d17dc79c8`
+
+These are the first two accounts provided by the Hardhat node.
 
 ### Project Structure
 

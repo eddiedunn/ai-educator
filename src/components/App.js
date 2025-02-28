@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Container, Button, Row, Col } from 'react-bootstrap'
+import { Container } from 'react-bootstrap'
 import { ethers } from 'ethers'
 
 // Components
@@ -14,12 +14,15 @@ import UserPage from '../pages/UserPage';
 // Config: Import your network config here
 // import config from '../config.json';
 
+// Wallet addresses
+const ADMIN_ADDRESS = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
+const USER_ADDRESS = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
+
 function App() {
   const [account, setAccount] = useState(null)
   const [balance, setBalance] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
-  const [view, setView] = useState('home') // 'home', 'admin', or 'user'
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [userRole, setUserRole] = useState(null) // 'admin', 'user', or null
 
   const loadBlockchainData = async () => {
     // Initiate provider
@@ -35,10 +38,15 @@ function App() {
     balance = ethers.utils.formatUnits(balance, 18)
     setBalance(balance)
 
-    // TODO: Check if account is admin in your smart contract
-    // For now, we'll simulate this with a hardcoded check
-    // In production, you would check a role in your smart contract
-    setIsAdmin(account.toLowerCase() === '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266'.toLowerCase())
+    // Check user role based on address
+    const lowerCaseAccount = account.toLowerCase()
+    if (lowerCaseAccount === ADMIN_ADDRESS.toLowerCase()) {
+      setUserRole('admin')
+    } else if (lowerCaseAccount === USER_ADDRESS.toLowerCase()) {
+      setUserRole('user')
+    } else {
+      setUserRole(null)
+    }
 
     setIsLoading(false)
   }
@@ -49,63 +57,61 @@ function App() {
     }
   }, [isLoading]);
 
+  // Listen for account changes
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', () => {
+        setIsLoading(true)
+      })
+    }
+    
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', () => {
+          setIsLoading(true)
+        })
+      }
+    }
+  }, [])
+
   const renderContent = () => {
-    switch(view) {
+    if (!account) {
+      return (
+        <div className="text-center mt-5">
+          <h3>Please connect your wallet to continue</h3>
+        </div>
+      )
+    }
+
+    switch(userRole) {
       case 'admin':
         return <AdminPage account={account} />
       case 'user':
         return <UserPage account={account} balance={balance} />
       default:
         return (
-          <>
-            <h1 className='my-4 text-center'>React Hardhat Template</h1>
-            <p className='text-center'><strong>Your ETH Balance:</strong> {balance} ETH</p>
-            
-            <Row className="mt-4 justify-content-center">
-              <Col md={6} className="d-grid gap-2">
-                {isAdmin && (
-                  <Button 
-                    variant="danger" 
-                    size="lg" 
-                    onClick={() => setView('admin')}
-                    className="mb-3"
-                  >
-                    Admin Dashboard
-                  </Button>
-                )}
-                <Button 
-                  variant="primary" 
-                  size="lg" 
-                  onClick={() => setView('user')}
-                >
-                  User Dashboard
-                </Button>
-              </Col>
-            </Row>
-          </>
+          <div className="text-center mt-5">
+            <h3>Unauthorized Wallet</h3>
+            <p>Connect with an authorized wallet address to access the application</p>
+            <p><strong>Current address:</strong> {account}</p>
+            <p>For testing, connect with one of these addresses:</p>
+            <ul className="list-unstyled">
+              <li>Admin: {ADMIN_ADDRESS}</li>
+              <li>User: {USER_ADDRESS}</li>
+            </ul>
+          </div>
         )
     }
   }
 
   return(
     <Container>
-      <Navigation account={account} />
+      <Navigation account={account} userRole={userRole} />
 
       {isLoading ? (
         <Loading />
       ) : (
-        <>
-          {view !== 'home' && (
-            <Button 
-              variant="secondary" 
-              className="mt-3"
-              onClick={() => setView('home')}
-            >
-              ← Back to Home
-            </Button>
-          )}
-          {renderContent()}
-        </>
+        renderContent()
       )}
     </Container>
   )
