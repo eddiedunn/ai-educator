@@ -1,7 +1,7 @@
 {
-  "name": "react_hardhat_template",
+  "name": "ai-educator",
   "version": "1.0.0",
-  "description": "",
+  "description": "This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.",
   "dependencies": {
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
@@ -14,12 +14,14 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "BROWSER=./launch-firefox.js react-scripts start",
+    "react-start": "react-scripts start",
+    "firefox": "chmod +x ./start-firefox.sh && ./start-firefox.sh",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-  "author": "gregory@dappuniversity.com",
+  "author": "eddie@eddiedunn.com",
   "license": "ISC",
   "eslintConfig": {
     "extends": [
@@ -41,6 +43,12 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^1.0.2",
+    "cross-env": "^7.0.3",
     "hardhat": "^2.10.1"
-  }
+  },
+  "main": "hardhat.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "keywords": []
 }
