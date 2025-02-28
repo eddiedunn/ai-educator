@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Container, Alert, Button, Spinner } from 'react-bootstrap'
+import { Container, Alert, Button } from 'react-bootstrap'
 import { ethers } from 'ethers'
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Web3ReactProvider } from '@web3-react/core';
@@ -19,21 +19,9 @@ import QuestionManagerArtifact from '../abis/contracts/QuestionManager.sol/Quest
 // Import the contract addresses and config from our config file
 import { CONTRACT_ADDRESSES, TEST_ACCOUNTS } from '../config';
 
-// Wallet addresses - Now using addresses from config, with fallback to Hardhat defaults
-// For Base Sepolia, set your admin address in the .env file as REACT_APP_ADMIN_ADDRESS
-const ADMIN_ADDRESS = process.env.REACT_APP_ADMIN_ADDRESS || TEST_ACCOUNTS.admin;
-// We don't restrict to a specific user address anymore - any non-admin account can be a user
-
 // Contract addresses from config file, which gets updated by the update-config.js script
 const PUZZLE_POINTS_ADDRESS = CONTRACT_ADDRESSES.puzzlePoints;
 const QUESTION_MANAGER_ADDRESS = CONTRACT_ADDRESSES.questionManager;
-
-// Function to get the ethers library from a provider
-function getLibrary(provider) {
-  const library = new ethers.providers.Web3Provider(provider);
-  library.pollingInterval = 12000;
-  return library;
-}
 
 function App() {
   const [account, setAccount] = useState(null)
@@ -45,9 +33,7 @@ function App() {
   const [questionManager, setQuestionManager] = useState(null)
   const [errorMessage, setErrorMessage] = useState(null)
   const [needsReset, setNeedsReset] = useState(false)
-  const [nodeIsRunning, setNodeIsRunning] = useState(true)
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
-  const [statusMessage, setStatusMessage] = useState(null)
 
   // Reset all application state
   const handleReset = () => {
@@ -66,7 +52,6 @@ function App() {
       setErrorMessage(null);
       setNeedsReset(false);
       setReconnectAttempts(0);
-      setNodeIsRunning(true);
       
       // Now start loading again
       setIsLoading(true);
@@ -107,44 +92,43 @@ function App() {
     // Clear any questionSet data
     localStorage.removeItem('questionSets');
     
-    // Optionally, clear all localStorage if you want a complete reset
-    // localStorage.clear();
-    
     console.log("Storage cleared");
   };
   
-  const checkNodeConnection = async () => {
+  // Reset application for new network
+  const resetForNewNetwork = () => {
+    console.log("Resetting application for new network");
+    clearBlockchainStorage();
+    
+    // Get current network if possible
     try {
-      // Try to connect to the Hardhat node
-      const provider = new ethers.providers.JsonRpcProvider('http://localhost:8545');
-      await provider.getBlockNumber();
-      setNodeIsRunning(true);
-      return true;
-    } catch (error) {
-      console.error("Error connecting to Hardhat node:", error);
-      setNodeIsRunning(false);
-      return false;
+      if (window.ethereum) {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        provider.getNetwork().then(network => {
+          console.log(`Resetting for network: ${network.name} (${network.chainId})`);
+          localStorage.setItem('lastKnownNetwork', network.chainId.toString());
+        }).catch(console.error);
+      }
+    } catch (err) {
+      console.error("Could not determine current network during reset:", err);
     }
+    
+    // Reset the application
+    setIsLoading(true);
+    setNeedsReset(false);
+    setErrorMessage(null);
   };
   
   const loadBlockchainData = async () => {
     // Prevent infinite loading if we've tried too many times
     if (reconnectAttempts > 3) {
       setIsLoading(false);
-      setErrorMessage("Failed to connect after multiple attempts. Please check if your blockchain node is running.");
+      setErrorMessage("Failed to connect after multiple attempts. Please check your network connection.");
       return;
     }
     
     try {
       setErrorMessage(null);
-      
-      // First check if the node is running
-      const nodeRunning = await checkNodeConnection();
-      if (!nodeRunning) {
-        setIsLoading(false);
-        setErrorMessage("Cannot connect to local blockchain node. Please make sure Hardhat is running.");
-        return;
-      }
       
       // Check if MetaMask is installed
       if (!window.ethereum) {
@@ -363,12 +347,20 @@ function App() {
     if (isLoading) {
       loadBlockchainData();
     }
-  }, [isLoading]);
+  }, [isLoading, loadBlockchainData]);
 
   // Listen for account changes
   useEffect(() => {
     if (window.ethereum) {
       const handleAccountsChanged = () => {
+        console.log("MetaMask accounts changed detected!");
+        // Clear cached data related to the previous account
+        setPuzzlePoints(null);
+        setQuestionManager(null);
+        setUserRole(null);
+        setBalance(0);
+        setTokenBalance(0);
+        // Force a full reload to ensure we get fresh data
         setIsLoading(true);
       };
       
@@ -390,140 +382,36 @@ function App() {
     }
   }, []);
 
-  const handleConnectToHardhat = async () => {
-    try {
-      setStatusMessage('Attempting to connect to Hardhat network...');
-      
-      // Try to switch to the Hardhat network first
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x7A69' }], // 31337 in hex
-        });
-      } catch (switchError) {
-        // This error code indicates that the chain has not been added to MetaMask
-        if (switchError.code === 4902) {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [
-              {
-                chainId: '0x7A69', // 31337 in hex
-                chainName: 'Hardhat Local',
-                nativeCurrency: {
-                  name: 'Ethereum',
-                  symbol: 'ETH',
-                  decimals: 18
-                },
-                rpcUrls: ['http://127.0.0.1:8545/'],
-              },
-            ],
-          });
-        } else {
-          throw switchError;
-        }
-      }
-      
-      // After ensuring the network is correct, request access to accounts
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts.length > 0) {
-        // Successfully connected
-        setStatusMessage(null);
-        loadBlockchainData();
-      }
-    } catch (error) {
-      console.error('Error connecting to Hardhat:', error);
-      setStatusMessage(`Failed to connect to Hardhat: ${error.message}`);
-    }
-  };
-
-  // Add function to help import Hardhat account to MetaMask
-  const handleImportHardhatAccount = async () => {
-    try {
-      setStatusMessage('Importing Hardhat test account to MetaMask...');
-      
-      // The first Hardhat test account private key
-      const firstAccountPrivateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-      
-      // Import account to MetaMask
-      await window.ethereum.request({
-        method: 'wallet_importRawKey',
-        params: [
-          firstAccountPrivateKey.replace('0x', ''), // Remove 0x prefix if present
-          'hardhat-test' // Password (can be anything)
-        ]
-      }).then(async (newAddress) => {
-        console.log('Successfully imported account:', newAddress);
-        
-        // Switch to the imported account
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x7A69' }], // 31337 in hex
-        });
-        
-        // Request account access again to use the newly imported account
-        await window.ethereum.request({
-          method: 'eth_requestAccounts'
-        });
-        
-        setStatusMessage('Successfully imported Hardhat test account!');
-        loadBlockchainData();
-      });
-    } catch (error) {
-      console.error('Error importing Hardhat account:', error);
-      setStatusMessage(`Failed to import account: ${error.message}. You may need to import manually.`);
-    }
-  };
-
   const renderContent = () => {
-    if (!nodeIsRunning) {
-      return (
-        <div className="text-center mt-5">
-          <Alert variant="danger">
-            <Alert.Heading>Blockchain Node Not Running</Alert.Heading>
-            <p>Cannot connect to the local Hardhat node. Please make sure it's running using:</p>
-            <pre className="bg-dark text-light p-3 mt-3">npm run chain</pre>
-            <p className="mt-3">Then click the button below to try again:</p>
-            <Button variant="primary" onClick={handleReset}>
-              Retry Connection
-            </Button>
-          </Alert>
-        </div>
-      );
-    }
-    
     if (needsReset) {
       return (
         <div className="text-center mt-5">
           <Alert variant="warning">
             <Alert.Heading>Blockchain State Mismatch Detected</Alert.Heading>
-            <p>It appears that the local blockchain has been reset since you last used the application.</p>
-            <p>This typically happens when the Hardhat node is restarted.</p>
+            <p>The application has detected a potential mismatch between expected blockchain state and current state.</p>
+            <p>This typically happens when connecting to a new network or if the network has been reset.</p>
             <div className="d-flex flex-column gap-2 mt-3">
               <Button variant="primary" onClick={handleReset}>
                 Reset Application State
               </Button>
+              <Button variant="secondary" onClick={resetForNewNetwork}>
+                Reset For Network Change
+              </Button>
               <Button variant="secondary" onClick={handleForceReconnect}>
                 Reset MetaMask Connection
-              </Button>
-              <Button 
-                variant="outline-danger" 
-                onClick={() => {
-                  clearBlockchainStorage();
-                  window.location.reload();
-                }}
-              >
-                Hard Reset (Clear All Data)
               </Button>
             </div>
           </Alert>
           <div className="mt-4">
-            <h5>If you continue to see this message:</h5>
-            <ol className="text-start">
-              <li>Ensure you are running the latest blockchain by using <code>npm run restart:chain</code></li>
-              <li>Deploy the contracts again with <code>npm run deploy:full</code></li>
-              <li>Reset your MetaMask: Settings &gt; Advanced &gt; Reset Account</li>
-              <li>Check that the contract addresses in App.js match your deployed contracts</li>
-            </ol>
+            <h5>Troubleshooting Tips:</h5>
+            <div className="text-start">
+              <p><strong>For Base Sepolia or other testnets:</strong></p>
+              <ol>
+                <li>Ensure you have the right contract addresses in your configuration</li>
+                <li>Verify you're connected to the correct network (Chain ID 84532 for Base Sepolia)</li>
+                <li>Check that your wallet has sufficient funds for transactions</li>
+              </ol>
+            </div>
           </div>
         </div>
       );
@@ -545,49 +433,6 @@ function App() {
                   Reconnect to MetaMask
                 </Button>
               </div>
-              
-              <Button 
-                variant="danger"
-                className="mt-2"
-                onClick={() => {
-                  if (window.confirm("⚠️ This will perform a full reset of your dApp. You should restart your local blockchain node after this. Continue?")) {
-                    // Clear EVERYTHING from localStorage
-                    localStorage.clear();
-                    
-                    // Force disconnect from MetaMask
-                    if (window.ethereum) {
-                      try {
-                        window.ethereum.request({
-                          method: 'wallet_revokePermissions',
-                          params: [{ eth_accounts: {} }]
-                        }).catch(console.warn);
-                      } catch (e) {
-                        console.warn("Could not revoke permissions:", e);
-                      }
-                    }
-                    
-                    // Display instructions before reload
-                    alert("After the page reloads:\n1. Stop your Hardhat node\n2. Run 'npx hardhat node' to restart it\n3. Run 'npm run deploy:full' in a new terminal\n4. Connect MetaMask to the admin account");
-                    
-                    // Reload the page
-                    setTimeout(() => {
-                      window.location.reload();
-                    }, 1000);
-                  }
-                }}
-              >
-                Emergency Full Reset
-              </Button>
-              
-              <div className="mt-3">
-                <strong>Troubleshooting Instructions:</strong>
-                <ol className="mt-2 mb-0 small">
-                  <li>Restart your local blockchain node with: <code>npx hardhat node</code></li>
-                  <li>Redeploy contracts with: <code>npm run deploy:full</code></li>
-                  <li>Reset MetaMask by going to Settings → Advanced → Reset Account</li>
-                  <li>Make sure you're using the admin account: <code>${ADMIN_ADDRESS}</code></li>
-                </ol>
-              </div>
             </div>
           </Alert>
         </Container>
@@ -600,14 +445,8 @@ function App() {
           <Alert variant="warning">
             <Alert.Heading>Wallet Connection Required</Alert.Heading>
             <p>
-              Please connect your MetaMask wallet to use this application. 
-              If you're using the local Hardhat development network, you'll need to:
+              Please connect your MetaMask wallet to use this application.
             </p>
-            <ol>
-              <li>Make sure MetaMask is installed and unlocked</li>
-              <li>Connect to the Hardhat network (Chain ID: 31337, RPC URL: http://127.0.0.1:8545)</li>
-              <li>Import a test account using one of the private keys from the Hardhat node</li>
-            </ol>
             <hr />
             <div className="d-flex flex-column gap-2">
               <Button 
@@ -616,26 +455,7 @@ function App() {
               >
                 Connect MetaMask
               </Button>
-              <Button 
-                variant="info" 
-                onClick={handleConnectToHardhat}
-              >
-                Connect to Hardhat Network
-              </Button>
-              <Button 
-                variant="success" 
-                onClick={handleImportHardhatAccount}
-              >
-                Import Test Account (Admin)
-              </Button>
             </div>
-            <p className="mt-3 text-muted">
-              <small>
-                <strong>Note:</strong> If you're using the local Hardhat network for development, you can use these test accounts:
-                <br />
-                Admin account: ${ADMIN_ADDRESS}
-              </small>
-            </p>
           </Alert>
         </div>
       );
@@ -643,20 +463,37 @@ function App() {
 
     switch(userRole) {
       case 'admin':
-        return <AdminPage 
-          account={account} 
-          tokenBalance={tokenBalance} 
-          puzzlePoints={puzzlePoints} 
-          questionManager={questionManager} 
-        />;
+        return (
+          <>
+            <div className="alert alert-warning mb-3">
+              <strong>You are connected as the admin (contract owner).</strong> To test as a regular user, please switch to a different account in MetaMask.
+              <button className="btn btn-sm btn-outline-dark ms-2" onClick={handleForceReconnect}>
+                Switch Account
+              </button>
+            </div>
+            <AdminPage 
+              account={account} 
+              tokenBalance={tokenBalance} 
+              puzzlePoints={puzzlePoints} 
+              questionManager={questionManager} 
+            />
+          </>
+        );
       case 'user':
-        return <UserPage 
-          account={account} 
-          balance={balance} 
-          tokenBalance={tokenBalance} 
-          puzzlePoints={puzzlePoints} 
-          questionManager={questionManager}
-        />;
+        return (
+          <>
+            <div className="alert alert-success mb-3">
+              <strong>You are connected as a regular user.</strong> This account can take assessments but cannot create or manage question sets.
+            </div>
+            <UserPage 
+              account={account} 
+              balance={balance} 
+              tokenBalance={tokenBalance} 
+              puzzlePoints={puzzlePoints} 
+              questionManager={questionManager}
+            />
+          </>
+        );
       default:
         return (
           <div className="text-center mt-5">
@@ -707,9 +544,6 @@ function App() {
       {isLoading ? (
         <div className="d-flex flex-column align-items-center mt-5">
           <Loading />
-          {statusMessage && (
-            <div className="mt-3 text-primary text-center">{statusMessage}</div>
-          )}
         </div>
       ) : (
         <Routes>

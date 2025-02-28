@@ -1,21 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Button, Form, Alert, Spinner, ProgressBar, Container, Row, Col } from 'react-bootstrap';
+import { Card, Button, Form, Alert, Spinner, ProgressBar, Container } from 'react-bootstrap';
 import { retrieveQuestionSet, submitAnswersToBlockchain, storeAnswers } from '../utils/answerStorage';
 import { debugLog, isDebugMode } from '../utils/debug';
 import { evaluateWithOpenAI } from '../utils/llmEvaluator';
 import { Link } from 'react-router-dom';
 import { metaMaskHooks } from '../utils/connectors';
-import { ethers } from 'ethers';
 import { activateInjectedConnector } from '../utils/connectors';
 
-const { useAccounts, useProvider, useChainId } = metaMaskHooks;
+const { useAccounts } = metaMaskHooks;
 
 const AssessmentPage = ({ questionManager }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
-  const [contentHash, setContentHash] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [error, setError] = useState(null);
@@ -28,30 +26,8 @@ const AssessmentPage = ({ questionManager }) => {
   // Use metaMask hooks
   const accounts = useAccounts();
   const account = accounts?.[0];
-  const provider = useProvider();
-  const chainId = useChainId();
 
-  useEffect(() => {
-    // Ensure wallet is connected
-    if (!account) {
-      activateInjectedConnector().then(success => {
-        if (!success) {
-          setError("Failed to connect wallet. Please connect your wallet manually.");
-        }
-      });
-    }
-
-    if (!questionManager) {
-      setError("Question Manager contract not connected");
-      setLoading(false);
-      return;
-    }
-
-    // Load the assessment data
-    loadAssessment();
-  }, [questionManager, id, account]);
-
-  const loadAssessment = async () => {
+  const loadAssessment = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -71,14 +47,12 @@ const AssessmentPage = ({ questionManager }) => {
 
       // Load question content from storage (IPFS in a real implementation)
       // For now, this creates mock questions based on the ID
-      const { questionSet, contentHash: qsContentHash } = await retrieveQuestionSet(id);
+      const { questionSet } = await retrieveQuestionSet(id);
       debugLog("Question set content:", questionSet);
-      debugLog("Content hash:", qsContentHash);
       debugLog(`Loaded ${questionSet.questions.length} questions`);
       console.log('Loaded questions:', questionSet.questions);
       
       setQuestions(questionSet.questions);
-      setContentHash(qsContentHash);
       console.log('Setting loading to false');
       setLoading(false);
     } catch (error) {
@@ -86,11 +60,27 @@ const AssessmentPage = ({ questionManager }) => {
       setError(`Failed to load assessment: ${error.message}`);
       setLoading(false);
     }
-  };
+  }, [id, questionManager]);
 
-  const handleReturnToMain = () => {
-    navigate('/');
-  };
+  useEffect(() => {
+    // Ensure wallet is connected
+    if (!account) {
+      activateInjectedConnector().then(success => {
+        if (!success) {
+          setError("Failed to connect wallet. Please connect your wallet manually.");
+        }
+      });
+    }
+
+    if (!questionManager) {
+      setError("Question Manager contract not connected");
+      setLoading(false);
+      return;
+    }
+
+    // Load the assessment data
+    loadAssessment();
+  }, [questionManager, id, account, loadAssessment]);
 
   const handleAnswerChange = (e, questionId) => {
     setAnswers(prev => ({
@@ -114,6 +104,10 @@ const AssessmentPage = ({ questionManager }) => {
   const handleSubmitAssessment = async () => {
     try {
       setSubmitting(true);
+      
+      // Log the currently connected account for debugging
+      console.log("SUBMITTING ASSESSMENT WITH ACCOUNT:", await questionManager.signer.getAddress());
+      console.log("QUESTION MANAGER ADDRESS:", questionManager.address);
       
       // Check if all questions have been answered
       const unansweredQuestions = questions.filter(q => 
