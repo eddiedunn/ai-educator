@@ -23,9 +23,9 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
             
             {userRole === 'user' && (
               <>
-                <Nav.Link href="#user">Dashboard</Nav.Link>
-                <Nav.Link href="#courses">My Courses</Nav.Link>
-                <Nav.Link href="#progress">Progress</Nav.Link>
+                <Nav.Link href="#dashboard">Dashboard</Nav.Link>
+                <Nav.Link href="#completed">Completed</Nav.Link>
+                <Nav.Link href="#leaderboard">Leaderboard</Nav.Link>
               </>
             )}
           </Nav>

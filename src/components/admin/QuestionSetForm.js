@@ -41,9 +41,8 @@ Explanation: [explanation]`
       
       // Extract base filename without extension to use as set name
       const baseName = file.name.split('.')[0];
-      if (!name) {
-        setName(baseName);
-      }
+      // Always update the name when a new file is selected
+      setName(baseName);
       
       const reader = new FileReader();
       
@@ -54,7 +53,7 @@ Explanation: [explanation]`
       
       reader.readAsText(file);
     }
-  }, [name]);
+  }, []);
   
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop, 
@@ -407,6 +406,7 @@ Explanation: [explanation]`
                       e.stopPropagation();
                       setSourceDocument('');
                       setSourceDocumentName('');
+                      setName('');
                     }}
                   >
                     Remove File
