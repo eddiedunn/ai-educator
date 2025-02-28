@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Container, Alert, Button, Spinner } from 'react-bootstrap'
 import { ethers } from 'ethers'
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Components
 import Navigation from './Navigation';
 import Loading from './Loading';
 import AdminPage from '../pages/AdminPage';
 import UserPage from '../pages/UserPage';
+import AssessmentPage from '../pages/AssessmentPage';
 
 // ABIs: Import your contract ABIs here
 import PuzzlePointsArtifact from '../abis/contracts/PuzzlePoints.sol/PuzzlePoints.json';
@@ -21,7 +23,7 @@ const USER_ADDRESS = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
 
 // Contract addresses - update these after deployment
 // These should ideally come from a config file or environment variables
-const PUZZLE_POINTS_ADDRESS = '0x0B306BF915C4d645ff596e518fAf3F9669b97016'; // Deployed PuzzlePoints address
+const PUZZLE_POINTS_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Deployed PuzzlePoints address
 const QUESTION_MANAGER_ADDRESS = '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0'; // Deployed QuestionManager address
 
 function App() {
@@ -479,15 +481,66 @@ function App() {
     
     if (errorMessage) {
       return (
-        <div className="text-center mt-5">
+        <Container className="mt-5">
           <Alert variant="danger">
             <Alert.Heading>Error</Alert.Heading>
             <p>{errorMessage}</p>
-            <Button variant="primary" className="mt-3" onClick={handleReset}>
-              Try Again
-            </Button>
+            <hr />
+            <div className="d-flex flex-column gap-2">
+              <div className="d-flex justify-content-between">
+                <Button variant="outline-danger" onClick={handleReset}>
+                  Reset Application State
+                </Button>
+                <Button variant="outline-primary" onClick={handleForceReconnect}>
+                  Reconnect to MetaMask
+                </Button>
+              </div>
+              
+              <Button 
+                variant="danger"
+                className="mt-2"
+                onClick={() => {
+                  if (window.confirm("⚠️ This will perform a full reset of your dApp. You should restart your local blockchain node after this. Continue?")) {
+                    // Clear EVERYTHING from localStorage
+                    localStorage.clear();
+                    
+                    // Force disconnect from MetaMask
+                    if (window.ethereum) {
+                      try {
+                        window.ethereum.request({
+                          method: 'wallet_revokePermissions',
+                          params: [{ eth_accounts: {} }]
+                        }).catch(console.warn);
+                      } catch (e) {
+                        console.warn("Could not revoke permissions:", e);
+                      }
+                    }
+                    
+                    // Display instructions before reload
+                    alert("After the page reloads:\n1. Stop your Hardhat node\n2. Run 'npx hardhat node' to restart it\n3. Run 'npm run deploy:full' in a new terminal\n4. Connect MetaMask to the admin account");
+                    
+                    // Reload the page
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 1000);
+                  }
+                }}
+              >
+                Emergency Full Reset
+              </Button>
+              
+              <div className="mt-3">
+                <strong>Troubleshooting Instructions:</strong>
+                <ol className="mt-2 mb-0 small">
+                  <li>Restart your local blockchain node with: <code>npx hardhat node</code></li>
+                  <li>Redeploy contracts with: <code>npm run deploy:full</code></li>
+                  <li>Reset MetaMask by going to Settings → Advanced → Reset Account</li>
+                  <li>Make sure you're using the admin account: <code>0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266</code></li>
+                </ol>
+              </div>
+            </div>
           </Alert>
-        </div>
+        </Container>
       );
     }
 
@@ -554,6 +607,7 @@ function App() {
           balance={balance} 
           tokenBalance={tokenBalance} 
           puzzlePoints={puzzlePoints} 
+          questionManager={questionManager}
         />;
       default:
         return (
@@ -629,7 +683,21 @@ function App() {
           )}
         </div>
       ) : (
-        renderContent()
+        <Routes>
+          <Route path="/" element={renderContent()} />
+          <Route 
+            path="/assessment/:id" 
+            element={
+              userRole === 'user' ? (
+                <AssessmentPage 
+                  questionManager={questionManager} 
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            } 
+          />
+        </Routes>
       )}
     </Container>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Form, Button, Card, Alert, Spinner, Modal, ProgressBar, InputGroup, Badge, Tabs, Tab } from 'react-bootstrap';
 import { ethers } from 'ethers';
+import { getOpenAIApiKey } from '../../config';
 
 const QuestionSetForm = ({ questionManager, onQuestionSetCreated }) => {
   // Form states
@@ -16,134 +17,146 @@ const QuestionSetForm = ({ questionManager, onQuestionSetCreated }) => {
   const [aiGenerationProgress, setAiGenerationProgress] = useState(0);
   const [commitToBlockchain, setCommitToBlockchain] = useState(false);
   const [fileUploadName, setFileUploadName] = useState('');
-  const [aiModel, setAiModel] = useState('gpt-3.5');
+  const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [aiStatus, setAiStatus] = useState('');
   const [filePreview, setFilePreview] = useState('');
   const [activeTab, setActiveTab] = useState('upload');
   const fileInputRef = useRef(null);
   
-  // AI prompt templates for different tasks
+  // Using free-form text questions instead of multiple-choice
+  const questionType = 'freeform';
+  
+  // AI prompt templates for different tasks (keeping for reference)
   const promptTemplates = {
-    'multiplechoice': `Generate {count} multiple-choice questions based on the following content. For each question, include 4 options (A, B, C, D) with exactly one correct answer. Also include a brief explanation for why the correct answer is right.
+    'freeform': `Generate {count} open-ended questions based on the following content. For each question, include the expected answer and a brief explanation.
     
 Content: {document}
 
 Format each question as:
 Question: [question text]
-A. [option A]
-B. [option B]
-C. [option C]
-D. [option D]
-Correct: [letter of correct option]
-Explanation: [explanation]`,
-
-    'truefalse': `Generate {count} true/false questions based on the following content. Include a brief explanation for why each statement is true or false.
-    
-Content: {document}
-
-Format each question as:
-Statement: [statement]
-Correct: [True/False]
-Explanation: [explanation]`,
-
-    'shortanswer': `Generate {count} short answer questions based on the following content. These should be questions that can be answered in one or two sentences. Include the ideal answer and an explanation.
-    
-Content: {document}
-
-Format each question as:
-Question: [question text]
-Answer: [ideal answer]
+Answer: [expected answer]
 Explanation: [explanation]`
   };
   
-  const [questionType, setQuestionType] = useState('multiplechoice');
-
-  // Enhanced AI question generation with more realistic API simulation
+  // Updated AI question generation with actual OpenAI API integration
   const generateQuestionsWithAI = async (document, count) => {
     setLoading(true);
     setAiGenerationProgress(0);
     setAiStatus('Analyzing document content...');
     
     try {
-      // In a real implementation, this would call an AI service API
-      // const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
-      // const response = await fetch('https://api.openai.com/v1/completions', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${apiKey}`
-      //   },
-      //   body: JSON.stringify({
-      //     model: aiModel === 'gpt-4' ? 'gpt-4-turbo' : 'gpt-3.5-turbo',
-      //     prompt: promptTemplates[questionType]
-      //       .replace('{count}', count)
-      //       .replace('{document}', document),
-      //     max_tokens: 2000,
-      //     temperature: 0.7
-      //   })
-      // });
-      // const data = await response.json();
-      // Parse the AI response and extract questions...
-      
-      // For demo purposes, we'll simulate AI generation with progress updates
-      const simulatedQuestions = [];
-      
-      // Stage 1: Document analysis
-      await new Promise(resolve => setTimeout(resolve, 1000));
       setAiGenerationProgress(10);
-      setAiStatus('Extracting key concepts...');
+      setAiStatus('Connecting to OpenAI API...');
       
-      // Stage 2: Key concept extraction
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setAiGenerationProgress(25);
-      setAiStatus('Formulating questions...');
+      // Debug: Log all environment variables that start with REACT_APP
+      console.log('Environment Variables:', Object.keys(process.env)
+        .filter(key => key.startsWith('REACT_APP_'))
+        .reduce((obj, key) => {
+          obj[key] = key === 'REACT_APP_OPENAI_API_KEY' 
+            ? (process.env[key] ? 'API KEY EXISTS' : 'API KEY MISSING') 
+            : process.env[key];
+          return obj;
+        }, {})
+      );
       
-      // Simulate different question types based on selection
-      for (let i = 0; i < count; i++) {
-        await new Promise(resolve => setTimeout(resolve, 700)); 
-        
-        let questionObj = { id: `q${i+1}` };
-        
-        if (questionType === 'multiplechoice') {
-          const options = ['Paris', 'London', 'Berlin', 'Madrid'];
-          const correct = Math.floor(Math.random() * 4);
-          const letters = ['A', 'B', 'C', 'D'];
-          
-          questionObj.questionText = `Sample MC question ${i+1}: What is the capital of ${document.substring(0, 15)}...?`;
-          questionObj.options = options.map((opt, idx) => ({ 
-            letter: letters[idx], 
-            text: opt 
-          }));
-          questionObj.correctOption = letters[correct];
-          questionObj.answerHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(letters[correct]));
-          questionObj.explanation = `${options[correct]} is the correct answer because it is the capital city.`;
-        } 
-        else if (questionType === 'truefalse') {
-          const isTrue = Math.random() > 0.5;
-          questionObj.questionText = `True or False: ${document.substring(0, 20)}... is related to question ${i+1}.`;
-          questionObj.answerHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(isTrue ? 'True' : 'False'));
-          questionObj.explanation = `This statement is ${isTrue ? 'true' : 'false'} because of factors related to the content.`;
-        }
-        else {
-          questionObj.questionText = `Short answer question ${i+1} about ${document.substring(0, 20)}...?`;
-          const answer = `Sample answer ${i+1}`;
-          questionObj.answerHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(answer));
-          questionObj.explanation = `The correct answer is "${answer}" because it addresses the key aspects mentioned in the question.`;
-        }
-        
-        simulatedQuestions.push(questionObj);
-        setAiGenerationProgress(25 + ((i + 1) / count) * 65);
-        setAiStatus(`Generated question ${i+1} of ${count}...`);
+      // Get API key using our helper function (from config.js)
+      const apiKey = getOpenAIApiKey();
+      console.log('API Key exists:', !!apiKey);
+      console.log('API Key starts with:', apiKey?.substring(0, 7));
+      
+      if (!apiKey) {
+        throw new Error('OpenAI API key is missing. Please check your configuration or environment variables.');
       }
       
-      // Final processing
-      setAiGenerationProgress(95);
-      setAiStatus('Finalizing question set...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Clean the API key - remove any line breaks or whitespace
+      const cleanApiKey = apiKey.replace(/\s+/g, '');
+      
+      setAiGenerationProgress(20);
+      setAiStatus('Sending request to OpenAI...');
+      
+      // Using fetch to call OpenAI Chat Completions API
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cleanApiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini", // Using GPT-4o-mini as requested
+          messages: [
+            {
+              role: "system",
+              content: "You are an educational content creator specialized in generating high-quality assessment questions."
+            },
+            {
+              role: "user",
+              content: `Generate ${count} open-ended questions based on the following content. For each question, include the expected answer and a brief explanation.
+              
+Content: ${document}
+
+Format each question exactly as:
+Question: [question text]
+Answer: [expected answer]
+Explanation: [explanation]`
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 4000
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
+      }
+      
+      const data = await response.json();
+      setAiGenerationProgress(70);
+      setAiStatus('Processing AI response...');
+      
+      // Parse the AI response and extract questions
+      const aiResponseText = data.choices[0].message.content;
+      const questionBlocks = aiResponseText.split(/Question:/).filter(block => block.trim().length > 0);
+      
+      const parsedQuestions = [];
+      
+      for (let i = 0; i < questionBlocks.length; i++) {
+        setAiGenerationProgress(70 + ((i + 1) / questionBlocks.length) * 25);
+        setAiStatus(`Processing question ${i+1} of ${questionBlocks.length}...`);
+        
+        try {
+          const block = "Question:" + questionBlocks[i];
+          
+          // Extract question text
+          const questionMatch = block.match(/Question:(.*?)(?=Answer:)/s);
+          const questionText = questionMatch ? questionMatch[1].trim() : "";
+          
+          // Extract answer
+          const answerMatch = block.match(/Answer:(.*?)(?=Explanation:)/s);
+          const answerText = answerMatch ? answerMatch[1].trim() : "";
+          
+          // Extract explanation
+          const explanationMatch = block.match(/Explanation:(.*?)(?=$|\n\s*Question:)/s);
+          const explanation = explanationMatch ? explanationMatch[1].trim() : "";
+          
+          if (questionText && answerText) {
+            parsedQuestions.push({
+              id: `q${i+1}`,
+              questionText,
+              answerHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(answerText)),
+              answerText, // Keep the plain text answer for display purposes
+              explanation
+            });
+          }
+        } catch (parseError) {
+          console.error(`Error parsing question ${i+1}:`, parseError);
+        }
+      }
+      
       setAiGenerationProgress(100);
       setAiStatus('Question generation complete!');
       
-      return simulatedQuestions;
+      return parsedQuestions;
     } catch (error) {
       console.error('Error generating questions:', error);
       throw new Error(`Failed to generate questions with AI: ${error.message}`);
@@ -231,11 +244,124 @@ Explanation: [explanation]`
     }
   };
 
+  // Add a dedicated function for blockchain submission with better error handling
+  const submitToBlockchain = async (questionSet) => {
+    if (!questionManager) {
+      throw new Error('Question manager contract not connected');
+    }
+    
+    setAiStatus('Preparing blockchain submission...');
+    
+    // Check if we're connected to the right network
+    try {
+      const network = await questionManager.provider.getNetwork();
+      console.log("Connected to network:", network);
+      
+      // Get signer account
+      const signer = await questionManager.signer.getAddress();
+      console.log("Submitting from account:", signer);
+      
+      // Check if account has ETH balance
+      const balance = await questionManager.provider.getBalance(signer);
+      console.log("Account balance:", ethers.utils.formatEther(balance), "ETH");
+      
+      if (balance.eq(0)) {
+        throw new Error('Your account has no ETH to pay for transaction fees');
+      }
+    } catch (error) {
+      console.error("Network connection error:", error);
+      throw new Error(`Network connection error: ${error.message}`);
+    }
+    
+    try {
+      setAiStatus('Submitting to blockchain...');
+      
+      // First check if this ID already exists
+      try {
+        const exists = await questionManager.questionSets(questionSet.id);
+        if (exists.contentHash !== "0x0000000000000000000000000000000000000000000000000000000000000000") {
+          throw new Error('A question set with this name already exists on the blockchain');
+        }
+      } catch (error) {
+        // If the error isn't about the ID already existing, rethrow it
+        if (!error.message.includes('already exists')) {
+          console.error("Error checking if ID exists:", error);
+        }
+      }
+      
+      // Gas estimation
+      let gasEstimate;
+      try {
+        gasEstimate = await questionManager.estimateGas.submitQuestionSetHash(
+          questionSet.id,
+          questionSet.contentHash,
+          questionSet.questionCount
+        );
+        console.log("Gas estimate:", gasEstimate.toString());
+      } catch (error) {
+        console.error("Gas estimation failed:", error);
+        
+        // Try to extract more specific error
+        if (error.error && error.error.message) {
+          throw new Error(`Transaction will fail: ${error.error.message}`);
+        } else if (error.message && error.message.includes("execution reverted")) {
+          const revertMsg = error.message.split("execution reverted:")[1]?.trim() || "unknown reason";
+          throw new Error(`Contract rejected transaction: ${revertMsg}`);
+        } else {
+          throw new Error(`Transaction will fail: ${error.message}`);
+        }
+      }
+      
+      // Execute transaction with higher gas limit for safety
+      const gasLimit = gasEstimate.mul(120).div(100); // Add 20% buffer
+      const tx = await questionManager.submitQuestionSetHash(
+        questionSet.id,
+        questionSet.contentHash,
+        questionSet.questionCount,
+        { gasLimit }
+      );
+      
+      console.log("Transaction sent:", tx.hash);
+      setAiStatus('Waiting for transaction confirmation...');
+      
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed in block:", receipt.blockNumber);
+      setAiStatus('Transaction confirmed!');
+      
+      return receipt;
+    } catch (error) {
+      console.error("Blockchain submission error:", error);
+      
+      // Format a user-friendly error message
+      let errorMessage = "Failed to submit to blockchain";
+      
+      if (error.code === 4001) {
+        errorMessage = "Transaction rejected by user";
+      } else if (error.message) {
+        errorMessage = error.message;
+        // Clean up common MetaMask error messages
+        if (errorMessage.includes("Internal JSON-RPC error")) {
+          errorMessage = "Contract rejected the transaction. Possible reasons: insufficient permissions, invalid inputs, or contract error";
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!name.trim()) {
+    // Validate name (question set ID)
+    const nameValue = name.trim();
+    if (!nameValue) {
       setError('Please provide a name for the question set');
+      return;
+    }
+    
+    // Additional validation for question set ID format
+    if (!/^[a-zA-Z0-9_-]+$/.test(nameValue)) {
+      setError('Question set name should only contain letters, numbers, underscores, and hyphens');
       return;
     }
     
@@ -263,9 +389,27 @@ Explanation: [explanation]`
       }
       
       // Calculate content hash from the full question set data
-      const contentHash = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes(JSON.stringify(questionData))
-      );
+      const contentString = JSON.stringify(questionData);
+      console.log("Content string length:", contentString.length);
+      
+      // Ensure we're creating a valid bytes32 hash
+      let contentHash;
+      try {
+        contentHash = ethers.utils.keccak256(
+          ethers.utils.toUtf8Bytes(contentString)
+        );
+        console.log("Generated content hash:", contentHash);
+        
+        // Verify it's a valid bytes32 value
+        if (!contentHash.startsWith('0x') || contentHash.length !== 66) {
+          console.warn("Warning: Content hash may not be properly formatted:", contentHash);
+        }
+      } catch (error) {
+        console.error("Error generating content hash:", error);
+        setError(`Failed to generate content hash: ${error.message}`);
+        setLoading(false);
+        return;
+      }
       
       // Create question set object
       const questionSet = {
@@ -280,27 +424,24 @@ Explanation: [explanation]`
       
       // If committing to blockchain immediately
       if (commitToBlockchain && questionManager) {
-        setAiStatus('Submitting to blockchain...');
-        const tx = await questionManager.submitQuestionSetHash(
-          questionSet.id,
-          questionSet.contentHash,
-          questionSet.questionCount
-        );
-        
-        setAiStatus('Waiting for transaction confirmation...');
-        await tx.wait();
-        setAiStatus('Transaction confirmed!');
-        
-        // Save to local storage even if committed to blockchain for local reference
-        const existingSets = JSON.parse(localStorage.getItem('questionSets') || '[]');
-        questionSet.onChain = true; // Mark as on chain
-        localStorage.setItem('questionSets', JSON.stringify([...existingSets, questionSet]));
+        try {
+          await submitToBlockchain(questionSet);
+          // Mark as on chain
+          questionSet.onChain = true;
+        } catch (error) {
+          console.error("Error committing to blockchain:", error);
+          setError(error.message);
+          // Still save locally but mark as not on chain
+          questionSet.onChain = false;
+        }
       } else {
-        // Save to local storage temporarily
-        const existingSets = JSON.parse(localStorage.getItem('questionSets') || '[]');
-        questionSet.onChain = false; // Mark as not on chain yet
-        localStorage.setItem('questionSets', JSON.stringify([...existingSets, questionSet]));
+        // Not committing to blockchain now, mark as not on chain
+        questionSet.onChain = false;
       }
+      
+      // Save to local storage in either case
+      const existingSets = JSON.parse(localStorage.getItem('questionSets') || '[]');
+      localStorage.setItem('questionSets', JSON.stringify([...existingSets, questionSet]));
       
       // Show success message
       setSuccess(true);
@@ -412,13 +553,21 @@ Explanation: [explanation]`
           </Form.Group>
           
           <Form.Group className="mb-3">
-            <Form.Check
-              type="checkbox"
-              label="Generate questions with AI"
-              checked={useAI}
-              onChange={(e) => setUseAI(e.target.checked)}
-              disabled={loading}
-            />
+            <Form.Label>AI Configuration</Form.Label>
+            <div className="d-flex align-items-center mb-2">
+              <Form.Check
+                type="switch"
+                id="useAI"
+                label="Use AI to generate questions"
+                checked={useAI}
+                onChange={(e) => setUseAI(e.target.checked)}
+                disabled={loading}
+                className="me-3"
+              />
+              {useAI && (
+                <Badge bg="info">Using GPT-4o-mini for question generation</Badge>
+              )}
+            </div>
           </Form.Group>
           
           {useAI ? (
@@ -429,29 +578,20 @@ Explanation: [explanation]`
                 <div className="row">
                   <div className="col-md-6">
                     <Form.Group className="mb-3">
-                      <Form.Label>Question Type</Form.Label>
-                      <Form.Select
-                        value={questionType}
-                        onChange={(e) => setQuestionType(e.target.value)}
-                        disabled={loading}
-                      >
-                        <option value="multiplechoice">Multiple Choice</option>
-                        <option value="truefalse">True/False</option>
-                        <option value="shortanswer">Short Answer</option>
-                      </Form.Select>
+                      <Form.Label>Question Format</Form.Label>
+                      <p className="mb-0 text-muted">
+                        <Badge bg="primary" className="me-2">Free-form</Badge>
+                        Questions will be generated in free-form text format
+                      </p>
                     </Form.Group>
                   </div>
                   <div className="col-md-6">
                     <Form.Group className="mb-3">
                       <Form.Label>AI Model</Form.Label>
-                      <Form.Select
-                        value={aiModel}
-                        onChange={(e) => setAiModel(e.target.value)}
-                        disabled={loading}
-                      >
-                        <option value="gpt-3.5">GPT-3.5 (Faster)</option>
-                        <option value="gpt-4">GPT-4 (Higher Quality)</option>
-                      </Form.Select>
+                      <p className="mb-0 text-muted">
+                        <Badge bg="info" className="me-2">GPT-4o-mini</Badge>
+                        OpenAI's lightweight yet powerful model
+                      </p>
                     </Form.Group>
                   </div>
                 </div>
@@ -603,16 +743,17 @@ Explanation: [explanation]`
                       </Form.Group>
                       
                       <Form.Group className="mb-3">
-                        <Form.Label>Answer</Form.Label>
+                        <Form.Label>Expected Answer</Form.Label>
                         <Form.Control
-                          type="text"
-                          placeholder="Correct answer"
+                          as="textarea"
+                          rows={2}
+                          placeholder="Enter the expected answer"
                           onChange={(e) => handleQuestionChange(index, 'answer', e.target.value)}
                           disabled={loading}
                           required
                         />
                         <Form.Text className="text-muted">
-                          This will be hashed and stored on the blockchain.
+                          The answer will be hashed and stored on the blockchain.
                         </Form.Text>
                       </Form.Group>
                       
@@ -701,25 +842,7 @@ Explanation: [explanation]`
                 <Card.Body>
                   <p><strong>Question:</strong> {question.questionText}</p>
                   
-                  {question.options && (
-                    <div className="mb-3">
-                      <p><strong>Options:</strong></p>
-                      <ul className="list-group">
-                        {question.options.map(option => (
-                          <li 
-                            key={option.letter} 
-                            className={`list-group-item ${option.letter === question.correctOption ? 'list-group-item-success' : ''}`}
-                          >
-                            {option.letter}. {option.text} 
-                            {option.letter === question.correctOption && (
-                              <Badge bg="success" className="ms-2">Correct</Badge>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  
+                  <p><strong>Answer:</strong> {question.answerText}</p>
                   <p><strong>Answer Hash:</strong> <code>{question.answerHash}</code></p>
                   {question.explanation && (
                     <p><strong>Explanation:</strong> {question.explanation}</p>
@@ -746,6 +869,427 @@ Explanation: [explanation]`
           </Button>
         </Modal.Footer>
       </Modal>
+      
+      {/* Debug Panel (only visible in development) */}
+      {process.env.NODE_ENV === 'development' && (
+        <Card.Footer className="bg-light">
+          <details>
+            <summary className="text-muted small">Debugging Tools</summary>
+            <div className="mt-3">
+              <h6 className="text-muted">Submission Test</h6>
+              <p className="small text-muted">Try submitting a minimal test question set with the simplest possible data to diagnose permission/contract issues.</p>
+              <div className="d-flex flex-wrap gap-2">
+                <Button 
+                  size="sm"
+                  variant="primary"
+                  onClick={async () => {
+                    try {
+                      if (!questionManager) {
+                        alert("Contract not connected");
+                        return;
+                      }
+                      
+                      // Create a minimal test question set
+                      const testId = "debug_test_" + Math.floor(Math.random() * 1000);
+                      const testData = [{
+                        id: "q1",
+                        questionText: "Test question",
+                        answerHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test")),
+                        answerText: "test", 
+                        explanation: "Test explanation"
+                      }];
+                      
+                      // Calculate hash
+                      const contentHash = ethers.utils.keccak256(
+                        ethers.utils.toUtf8Bytes(JSON.stringify(testData))
+                      );
+                      
+                      // Create question set
+                      const questionSet = {
+                        id: testId,
+                        questionCount: 1,
+                        contentHash,
+                        timestamp: Date.now(),
+                        questionType: 'debug',
+                        sourceDocumentPreview: "Test document",
+                        questions: testData
+                      };
+                      
+                      alert(`Attempting to submit test question set:\nID: ${testId}\nContent Hash: ${contentHash}\nQuestion Count: 1`);
+                      
+                      // Submit to blockchain with detailed error handling
+                      try {
+                        // First check signer
+                        const signer = await questionManager.signer.getAddress();
+                        console.log("Test using account:", signer);
+                        
+                        // Try gas estimation first
+                        const gasEstimate = await questionManager.estimateGas.submitQuestionSetHash(
+                          questionSet.id,
+                          questionSet.contentHash,
+                          questionSet.questionCount
+                        );
+                        
+                        console.log("Gas estimate for test submission:", gasEstimate.toString());
+                        
+                        // If gas estimation succeeds, try the actual transaction with a gas limit
+                        const tx = await questionManager.submitQuestionSetHash(
+                          questionSet.id,
+                          questionSet.contentHash,
+                          questionSet.questionCount,
+                          { gasLimit: gasEstimate.mul(120).div(100) } // 20% buffer
+                        );
+                        
+                        alert(`✅ Test transaction sent!\nTx Hash: ${tx.hash}\n\nWaiting for confirmation...`);
+                        
+                        // Wait for transaction
+                        const receipt = await tx.wait();
+                        alert(`✅ Test transaction confirmed!\nBlock: ${receipt.blockNumber}\nStatus: ${receipt.status === 1 ? 'Success' : 'Failed'}`);
+                      } catch (error) {
+                        console.error("Test transaction failed:", error);
+                        
+                        // Format a readable error message
+                        let errorMsg = error.message || "Unknown error";
+                        if (errorMsg.includes("Internal JSON-RPC error")) {
+                          errorMsg = "MetaMask RPC Error - This often means the contract rejected the transaction or you don't have permission";
+                        }
+                        
+                        alert(`❌ Test transaction failed!\n\nError: ${errorMsg}`);
+                      }
+                    } catch (error) {
+                      console.error("Test setup error:", error);
+                      alert(`Test setup error: ${error.message}`);
+                    }
+                  }}
+                >
+                  Test Minimal Submission
+                </Button>
+                
+                <Button 
+                  size="sm"
+                  variant="warning"
+                  onClick={async () => {
+                    try {
+                      if (!questionManager) {
+                        alert("Contract not connected");
+                        return;
+                      }
+                      
+                      // Get signer account
+                      const signer = await questionManager.signer.getAddress();
+                      alert(`Testing with account: ${signer}`);
+                      
+                      // Get provider network
+                      const network = await questionManager.provider.getNetwork();
+                      alert(`Connected to network: ${JSON.stringify({chainId: network.chainId, name: network.name})}`);
+                      
+                      // Test with a direct raw transaction approach
+                      try {
+                        // Use a simpler transaction - just call a view function first
+                        alert("Testing a simple read operation first...");
+                        
+                        try {
+                          const owner = await questionManager.owner();
+                          alert(`Contract owner address: ${owner}`);
+                          
+                          if (owner.toLowerCase() !== signer.toLowerCase()) {
+                            alert(`⚠️ WARNING: You are not the contract owner!\nYour address: ${signer}\nOwner address: ${owner}`);
+                          } else {
+                            alert(`You are the contract owner ✅`);
+                          }
+                        } catch (readError) {
+                          alert(`Error reading owner: ${readError.message}`);
+                        }
+                        
+                        // Now try a simple transaction that's unlikely to fail
+                        // Use ethers directly with low-level parameters
+                        alert("Attempting direct transaction with minimal data...");
+                        
+                        // Create a very simple test ID - use timestamp to ensure uniqueness
+                        const simpleId = "simple_" + Date.now();
+                        const simpleHash = ethers.utils.hexZeroPad("0x1", 32); // Very simple hash
+                        const simpleCount = 1;
+                        
+                        // Log exact parameters
+                        console.log("Simple transaction parameters:", {
+                          id: simpleId,
+                          hash: simpleHash,
+                          count: simpleCount
+                        });
+                        
+                        // Try with manual transaction
+                        const rawTx = await questionManager.populateTransaction.submitQuestionSetHash(
+                          simpleId,
+                          simpleHash,
+                          simpleCount
+                        );
+                        
+                        // Modify gas parameters
+                        rawTx.gasLimit = ethers.utils.hexlify(3000000); // Very high gas limit
+                        delete rawTx.gasPrice; // Let MetaMask handle gas price
+                        
+                        console.log("Raw transaction data:", rawTx);
+                        
+                        // Send raw transaction
+                        const provider = new ethers.providers.Web3Provider(window.ethereum);
+                        const walletSigner = provider.getSigner();
+                        const txResponse = await walletSigner.sendTransaction(rawTx);
+                        
+                        alert(`✅ Raw transaction sent!\nTx Hash: ${txResponse.hash}`);
+                        
+                        const txReceipt = await txResponse.wait();
+                        alert(`✅ Transaction confirmed!\nBlock: ${txReceipt.blockNumber}`);
+                      } catch (txError) {
+                        console.error("Transaction test failed:", txError);
+                        
+                        // Enhanced error logging
+                        let errorInfo = "Error details:\n";
+                        if (txError.code) errorInfo += `Code: ${txError.code}\n`;
+                        if (txError.reason) errorInfo += `Reason: ${txError.reason}\n`;
+                        if (txError.method) errorInfo += `Method: ${txError.method}\n`;
+                        if (txError.transaction) errorInfo += `Tx Data: ${JSON.stringify(txError.transaction)}\n`;
+                        if (txError.data) errorInfo += `Data: ${JSON.stringify(txError.data)}\n`;
+                        
+                        console.error(errorInfo);
+                        
+                        alert(`❌ Test transaction failed!\n\nError: ${txError.message}`);
+                      }
+                    } catch (error) {
+                      console.error("Error in advanced test:", error);
+                      alert(`Advanced test error: ${error.message}`);
+                    }
+                  }}
+                >
+                  Advanced Diagnostic Test
+                </Button>
+                
+                <Button 
+                  size="sm"
+                  variant="info"
+                  onClick={async () => {
+                    try {
+                      if (!questionManager) {
+                        alert("Contract not connected");
+                        return;
+                      }
+                      
+                      // Check connection details
+                      const provider = questionManager.provider;
+                      const signer = questionManager.signer;
+                      
+                      // Check account
+                      const account = await signer.getAddress();
+                      
+                      // Output connection info
+                      let info = "CONNECTION DIAGNOSTICS\n\n";
+                      
+                      // 1. Check network
+                      const network = await provider.getNetwork();
+                      info += `Network: ${network.name || 'localhost'} (Chain ID: ${network.chainId})\n`;
+                      
+                      if (network.chainId !== 31337) {
+                        info += "⚠️ WARNING: Not connected to Hardhat network (Chain ID 31337)\n\n";
+                      }
+                      
+                      // 2. Check connected account
+                      info += `Connected account: ${account}\n`;
+                      
+                      const expectedAdmin = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+                      if (account.toLowerCase() !== expectedAdmin.toLowerCase()) {
+                        info += `⚠️ WARNING: Not using admin account: ${expectedAdmin}\n\n`;
+                      }
+                      
+                      // 3. Check ETH balance
+                      const balance = await provider.getBalance(account);
+                      info += `ETH Balance: ${ethers.utils.formatEther(balance)} ETH\n`;
+                      
+                      if (balance.eq(0)) {
+                        info += "⚠️ WARNING: Account has 0 ETH balance\n\n";
+                      }
+                      
+                      // 4. Check contract
+                      info += `Contract address: ${questionManager.address}\n`;
+                      
+                      // 5. Check contract owner
+                      try {
+                        const owner = await questionManager.owner();
+                        info += `Contract owner: ${owner}\n`;
+                        
+                        if (owner.toLowerCase() !== account.toLowerCase()) {
+                          info += "⚠️ WARNING: You are not the contract owner\n\n";
+                        } else {
+                          info += "✅ You are the contract owner\n\n";
+                        }
+                      } catch (err) {
+                        info += `Error checking owner: ${err.message}\n\n`;
+                      }
+                      
+                      // 6. Check for transaction count/nonce issues
+                      const transactionCount = await provider.getTransactionCount(account);
+                      info += `Transaction count (nonce): ${transactionCount}\n`;
+                      
+                      // 7. Display block information
+                      const blockNumber = await provider.getBlockNumber();
+                      info += `Current block number: ${blockNumber}\n`;
+                      
+                      alert(info);
+                    } catch (error) {
+                      console.error("Diagnostics error:", error);
+                      alert(`Error running diagnostics: ${error.message}`);
+                    }
+                  }}
+                >
+                  Check Admin Account
+                </Button>
+                
+                <Button 
+                  size="sm"
+                  variant="danger"
+                  onClick={async () => {
+                    try {
+                      if (!questionManager) {
+                        alert("Contract not connected");
+                        return;
+                      }
+                      
+                      // First check if we can read from the contract
+                      alert("Step 1: Testing contract read operations...");
+                      
+                      try {
+                        const owner = await questionManager.owner();
+                        alert(`✅ Successfully read contract owner: ${owner}`);
+                      } catch (readError) {
+                        alert(`❌ Failed to read contract owner: ${readError.message}`);
+                        return;
+                      }
+                      
+                      // Check if contract interface is correct by inspecting its functions
+                      alert("Step 2: Checking contract interface...");
+                      
+                      try {
+                        // This will throw if the function doesn't exist
+                        if (!questionManager.functions.submitQuestionSetHash) {
+                          alert("❌ Contract does not have submitQuestionSetHash function!");
+                          return;
+                        }
+                        
+                        alert("✅ Contract has submitQuestionSetHash function");
+                      } catch (interfaceError) {
+                        alert(`❌ Interface error: ${interfaceError.message}`);
+                        return;
+                      }
+                      
+                      // Check MetaMask state
+                      alert("Step 3: Checking MetaMask state...");
+                      
+                      try {
+                        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                        alert(`Connected to chain ID: ${parseInt(chainId, 16)}`);
+                        
+                        // Check if we have the right account
+                        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                        const account = accounts[0];
+                        alert(`Using account: ${account}`);
+                        
+                        // Try to reset MetaMask transaction state
+                        alert("Attempting to reset MetaMask state...");
+                        await window.ethereum.request({
+                          method: 'wallet_requestPermissions',
+                          params: [{ eth_accounts: {} }]
+                        });
+                        
+                        alert("✅ MetaMask permissions refreshed");
+                      } catch (mmError) {
+                        alert(`❌ MetaMask error: ${mmError.message}`);
+                      }
+                      
+                      // Try a raw direct call to the node
+                      alert("Step 4: Attempting direct node call...");
+                      
+                      try {
+                        // First check if we can make a basic eth_call
+                        const callData = await window.ethereum.request({
+                          method: 'eth_call',
+                          params: [{
+                            to: questionManager.address,
+                            data: '0x8da5cb5b' // owner() function signature
+                          }, 'latest']
+                        });
+                        
+                        alert(`✅ Direct eth_call successful: ${callData}`);
+                      } catch (callError) {
+                        alert(`❌ Direct eth_call failed: ${callError.message}`);
+                      }
+                      
+                      // Final step: try a very simple transaction bypassing ethers
+                      alert("Step 5: Trying minimal direct transaction...");
+                      
+                      try {
+                        // Create simplest possible question set ID
+                        const simpleId = "test123";
+                        // Use a static hash that we know is valid
+                        const simpleHash = "0x1111111111111111111111111111111111111111111111111111111111111111";
+                        // Encode the transaction data manually
+                        
+                        // Function signature for submitQuestionSetHash(string,bytes32,uint256)
+                        const functionSignature = "0x" + ethers.utils.keccak256(
+                          ethers.utils.toUtf8Bytes("submitQuestionSetHash(string,bytes32,uint256)")
+                        ).substring(2, 10);
+                        
+                        // Encode parameters
+                        const abiCoder = new ethers.utils.AbiCoder();
+                        
+                        // Need to encode the dynamic string with its offset and length
+                        const encodedParams = abiCoder.encode(
+                          ["string", "bytes32", "uint256"],
+                          [simpleId, simpleHash, 1]
+                        );
+                        
+                        const data = functionSignature + encodedParams.substring(2); // remove 0x
+                        
+                        alert("Sending direct transaction...");
+                        console.log("Transaction data:", data);
+                        
+                        // Get accounts again to be sure we have the latest state
+                        const currentAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+                        if (!currentAccounts || currentAccounts.length === 0) {
+                          throw new Error("No accounts connected to MetaMask");
+                        }
+                        
+                        const txHash = await window.ethereum.request({
+                          method: 'eth_sendTransaction',
+                          params: [{
+                            from: currentAccounts[0],
+                            to: questionManager.address,
+                            gas: '0x' + (3000000).toString(16), // Very high gas limit
+                            data: data
+                          }]
+                        });
+                        
+                        alert(`✅ Transaction submitted! Hash: ${txHash}`);
+                      } catch (txError) {
+                        console.error("Raw tx error:", txError);
+                        
+                        let errorDetails = `❌ Transaction failed: ${txError.message}\n\n`;
+                        
+                        if (txError.code) errorDetails += `Error code: ${txError.code}\n`;
+                        if (txError.data) errorDetails += `Error data: ${JSON.stringify(txError.data)}\n`;
+                        
+                        alert(errorDetails);
+                      }
+                    } catch (error) {
+                      console.error("Deep diagnostic error:", error);
+                      alert(`Deep diagnostics failed: ${error.message}`);
+                    }
+                  }}
+                >
+                  Deep Diagnostics
+                </Button>
+              </div>
+            </div>
+          </details>
+        </Card.Footer>
+      )}
     </Card>
   );
 };

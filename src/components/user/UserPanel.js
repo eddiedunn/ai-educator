@@ -2,6 +2,14 @@ import React from 'react';
 import { Card, Button, ListGroup, Badge } from 'react-bootstrap';
 
 const UserPanel = ({ account, balance, tokenBalance, puzzlePoints }) => {
+  // Function to scroll to question sets
+  const scrollToQuestionSets = () => {
+    const questionSetsElement = document.querySelector('.available-question-sets');
+    if (questionSetsElement) {
+      questionSetsElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <Card className="my-4">
       <Card.Header as="h5">User Dashboard</Card.Header>
@@ -28,7 +36,7 @@ const UserPanel = ({ account, balance, tokenBalance, puzzlePoints }) => {
         </ListGroup>
         
         <div className="d-grid gap-2">
-          <Button variant="primary">View Questions</Button>
+          <Button variant="primary" onClick={scrollToQuestionSets}>View Questions</Button>
           <Button variant="outline-secondary">My Assessment History</Button>
         </div>
       </Card.Body>
