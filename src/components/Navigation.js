@@ -1,4 +1,4 @@
-import { Navbar, Container, Nav, Badge, Alert } from 'react-bootstrap'
+import { Navbar, Container, Nav, Badge } from 'react-bootstrap'
 import logo from '../logo.png'
 
 const Navigation = ({ account, userRole, tokenBalance }) => {
@@ -39,8 +39,7 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
                       {parseFloat(tokenBalance).toFixed(2)} PZLPT
                     </Badge>
                   )}
-                  <div className={`px-3 py-1 border rounded-3 text-white ${userRole === 'admin' ? 'bg-danger' : 'bg-success'}`}>
-                    {userRole === 'admin' ? '👑 ADMIN: ' : '👤 USER: '}
+                  <div className="px-2 py-1 rounded-2 text-truncate" style={{ maxWidth: '180px' }}>
                     {account.slice(0, 6) + '...' + account.slice(38, 42)}
                   </div>
                 </Nav.Item>
@@ -53,18 +52,6 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
           </Navbar.Collapse>
         </Container>
       </Navbar>
-      
-      {account && (
-        <Container>
-          <Alert variant={userRole === 'admin' ? 'danger' : 'info'} className="py-2 mb-3">
-            <small>
-              <strong>Connected as:</strong> {userRole === 'admin' ? 'ADMIN (Contract Owner)' : 'Regular User'} 
-              <span className="ms-2">|</span>
-              <strong className="ms-2">Address:</strong> {account}
-            </small>
-          </Alert>
-        </Container>
-      )}
     </>
   )
 }
