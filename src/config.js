@@ -11,20 +11,41 @@ export const OPENAI_CONFIG = {
 
 // Blockchain configuration
 export const BLOCKCHAIN_CONFIG = {
-  chainId: process.env.REACT_APP_CHAIN_ID || '31337',
-  rpcUrl: process.env.REACT_APP_RPC_URL || 'http://127.0.0.1:8545',
-  networkName: 'Hardhat Network',
-  blockExplorer: '',
+  chainId: process.env.REACT_APP_CHAIN_ID || '84532',
+  rpcUrl: process.env.REACT_APP_RPC_URL || 'https://sepolia.base.org',
+  networkName: 'Base Sepolia Testnet',
+  blockExplorer: 'https://sepolia.basescan.org',
   currencyName: 'ETH',
   currencySymbol: 'ETH',
   currencyDecimals: 18,
   isTestnet: true
 };
 
+// IPFS configuration
+export const IPFS_CONFIG = {
+  // In development, use simulated IPFS (actually uses localStorage)
+  // In production, set this to true to use actual IPFS
+  enabled: process.env.REACT_APP_USE_IPFS === 'true',
+  
+  // For real IPFS implementation
+  gateway: process.env.REACT_APP_IPFS_GATEWAY || 'https://ipfs.io/ipfs/',
+  
+  // When using real IPFS, this would have configuration for the IPFS node
+  // This is a placeholder for now
+  node: {
+    host: process.env.REACT_APP_IPFS_HOST || 'ipfs.infura.io',
+    port: process.env.REACT_APP_IPFS_PORT || 5001,
+    protocol: process.env.REACT_APP_IPFS_PROTOCOL || 'https',
+    apiPath: process.env.REACT_APP_IPFS_API_PATH || '/api/v0',
+    projectId: process.env.REACT_APP_IPFS_PROJECT_ID,
+    projectSecret: process.env.REACT_APP_IPFS_PROJECT_SECRET
+  }
+};
+
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
-  puzzlePoints: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-  questionManager: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0'
+  puzzlePoints: '0x9422ad4146D050964E42D744B04AbfCEA166DD74',
+  questionManager: '0x0cB0e4Df0Df1e000565E555b281b7084670116dE'
 };
 
 // Test accounts

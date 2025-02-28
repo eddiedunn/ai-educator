@@ -211,3 +211,42 @@ For backend services:
 
 Remember to keep it simple given your 48-hour constraint!
 
+## IPFS Storage Configuration
+
+This application includes a storage abstraction layer that can use either browser localStorage (for development) or IPFS (for production). The implementation allows for seamless switching between the two storage methods with a simple configuration change.
+
+### Development Mode (Default)
+
+By default, the application uses a simulated IPFS system that actually stores data in the browser's localStorage. This simulation implements the same interface as the real IPFS implementation, but without external dependencies.
+
+### Production Mode with Real IPFS
+
+To switch to using real IPFS storage:
+
+1. Set the `REACT_APP_USE_IPFS` environment variable to `true` in your `.env` file:
+   ```
+   REACT_APP_USE_IPFS=true
+   ```
+
+2. Configure your IPFS connection by setting the following environment variables:
+   ```
+   REACT_APP_IPFS_HOST=ipfs.infura.io
+   REACT_APP_IPFS_PORT=5001
+   REACT_APP_IPFS_PROTOCOL=https
+   REACT_APP_IPFS_API_PATH=/api/v0
+   REACT_APP_IPFS_PROJECT_ID=your-infura-project-id
+   REACT_APP_IPFS_PROJECT_SECRET=your-infura-project-secret
+   ```
+
+3. For Infura IPFS, you'll need to sign up for an account and create a project to get your project ID and secret.
+
+### How It Works
+
+The storage service (`src/utils/storageService.js`) provides a consistent interface for storing and retrieving question sets and answers. It automatically handles:
+
+- Content addressing (generating IPFS-compatible hashes)
+- Indexing of stored items
+- Retrieval by ID or content hash
+
+This abstraction ensures that your application code doesn't need to change when switching between development and production storage methods.
+

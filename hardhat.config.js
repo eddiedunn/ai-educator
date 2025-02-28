@@ -5,7 +5,9 @@ require('dotenv').config();
 // Get environment variables or use defaults
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "https://sepolia.infura.io/v3/your-api-key";
+const BASE_SEPOLIA_RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -23,9 +25,9 @@ module.exports = {
   networks: {
     hardhat: {
       mining: {
-        auto: true,
-        //auto: false,       // disables auto-mining of every transaction
-        //interval: 250     // mines a new block every 250 ms
+        //auto: true,
+        auto: false,       // disables auto-mining of every transaction
+        interval: 250     // mines a new block every 250 ms
       },
       allowUnlimitedContractSize: true,
       gas: 100000000,
@@ -41,10 +43,32 @@ module.exports = {
       chainId: 11155111,
       blockConfirmations: 6,
     },
+    // Base Sepolia testnet configuration
+    baseSepoliaTestnet: {
+      url: BASE_SEPOLIA_RPC_URL,
+      accounts: [PRIVATE_KEY],
+      chainId: 84532, // Base Sepolia chainId
+      blockConfirmations: 6,
+      gasPrice: 1000000000, // 1 gwei
+      // Optional: You can add verification configuration here
+    },
     // You can add more networks as needed
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+    apiKey: {
+      sepolia: ETHERSCAN_API_KEY,
+      baseSepoliaTestnet: BASESCAN_API_KEY,
+    },
+    customChains: [
+      {
+        network: "baseSepoliaTestnet",
+        chainId: 84532,
+        urls: {
+          apiURL: "https://api-sepolia.basescan.org/api",
+          browserURL: "https://sepolia.basescan.org"
+        }
+      }
+    ]
   },
   paths: {
     artifacts: "./src/abis"

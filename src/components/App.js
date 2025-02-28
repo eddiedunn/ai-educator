@@ -16,17 +16,17 @@ import AssessmentPage from '../pages/AssessmentPage';
 import PuzzlePointsArtifact from '../abis/contracts/PuzzlePoints.sol/PuzzlePoints.json';
 import QuestionManagerArtifact from '../abis/contracts/QuestionManager.sol/QuestionManager.json';
 
-// Config: Import your network config here
-// import config from '../config.json';
+// Import the contract addresses and config from our config file
+import { CONTRACT_ADDRESSES, TEST_ACCOUNTS } from '../config';
 
-// Wallet addresses
-const ADMIN_ADDRESS = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
-const USER_ADDRESS = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
+// Wallet addresses - Now using addresses from config, with fallback to Hardhat defaults
+// For Base Sepolia, set your admin address in the .env file as REACT_APP_ADMIN_ADDRESS
+const ADMIN_ADDRESS = process.env.REACT_APP_ADMIN_ADDRESS || TEST_ACCOUNTS.admin;
+// We don't restrict to a specific user address anymore - any non-admin account can be a user
 
-// Contract addresses - update these after deployment
-// These should ideally come from a config file or environment variables
-const PUZZLE_POINTS_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Deployed PuzzlePoints address
-const QUESTION_MANAGER_ADDRESS = '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0'; // Deployed QuestionManager address
+// Contract addresses from config file, which gets updated by the update-config.js script
+const PUZZLE_POINTS_ADDRESS = CONTRACT_ADDRESSES.puzzlePoints;
+const QUESTION_MANAGER_ADDRESS = CONTRACT_ADDRESSES.questionManager;
 
 // Function to get the ethers library from a provider
 function getLibrary(provider) {
@@ -102,6 +102,7 @@ function App() {
     console.log("Clearing all blockchain storage data");
     // Remove specific keys we know about
     localStorage.removeItem('lastKnownBlockNumber');
+    localStorage.removeItem('lastKnownNetwork');
     
     // Clear any questionSet data
     localStorage.removeItem('questionSets');
@@ -159,12 +160,17 @@ function App() {
       try {
         const currentBlock = await provider.getBlockNumber();
         const lastKnownBlock = localStorage.getItem('lastKnownBlockNumber');
+        const currentNetwork = await provider.getNetwork();
+        const lastKnownNetwork = localStorage.getItem('lastKnownNetwork');
         
         console.log(`Current block: ${currentBlock}, Last known block: ${lastKnownBlock || 'none'}`);
+        console.log(`Current network: ${currentNetwork.chainId}, Last known network: ${lastKnownNetwork || 'none'}`);
         
-        // More aggressively detect resets - if we have a last known block
-        // but it's significantly different from current, consider it a reset
-        if (lastKnownBlock) {
+        // Store current network ID
+        localStorage.setItem('lastKnownNetwork', currentNetwork.chainId.toString());
+        
+        // Only check for blockchain reset if we're on the same network as before
+        if (lastKnownBlock && lastKnownNetwork && lastKnownNetwork === currentNetwork.chainId.toString()) {
           const lastBlock = parseInt(lastKnownBlock);
           // If last known block is higher OR if it's drastically lower (indicating complete reset)
           if (lastBlock > currentBlock || (lastBlock + 10 < currentBlock)) {
@@ -177,7 +183,7 @@ function App() {
             localStorage.setItem('lastKnownBlockNumber', currentBlock.toString());
           }
         } else {
-          // First time loading, no previous block number
+          // First time loading or different network, store current block number
           localStorage.setItem('lastKnownBlockNumber', currentBlock.toString());
         }
       } catch (error) {
@@ -252,9 +258,9 @@ function App() {
             errorString.includes("invalid block tag") || 
             (error.data && error.data.message && error.data.message.includes("invalid block tag"))
           ) {
-            console.warn("Detected invalid block tag error - blockchain likely reset");
-            setNeedsReset(true);
-            setIsLoading(false);
+            console.warn("Detected invalid block tag error - may be due to network change or blockchain reset");
+            // Don't automatically set needsReset, just retry loading
+            setIsLoading(true);
             return;
           }
           
@@ -275,8 +281,9 @@ function App() {
         // Check for blockchain reset error patterns
         if (error.toString().toLowerCase().includes("invalid block tag") || 
             (error.data && error.data.message && error.data.message.includes("invalid block tag"))) {
-          setNeedsReset(true);
-          setIsLoading(false);
+          console.warn("Detected invalid block tag error - may be due to network change or blockchain reset");
+          // Don't automatically set needsReset, just retry loading
+          setIsLoading(true);
           return;
         }
         
@@ -287,13 +294,27 @@ function App() {
       }
 
       // Set user role based on connected address
-      const lowerCaseAccount = account.toLowerCase();
-      if (lowerCaseAccount === ADMIN_ADDRESS.toLowerCase()) {
-        setUserRole('admin');
-      } else if (lowerCaseAccount === USER_ADDRESS.toLowerCase()) {
+      try {
+        // Check if connected wallet is the owner of the QuestionManager contract
+        const owner = await questionManager.owner();
+        const lowerCaseAccount = account.toLowerCase();
+        const lowerCaseOwner = owner.toLowerCase();
+        
+        console.log(`Connected account: ${lowerCaseAccount}`);
+        console.log(`Contract owner: ${lowerCaseOwner}`);
+        
+        if (lowerCaseAccount === lowerCaseOwner) {
+          setUserRole('admin');
+          console.log('Connected as admin (contract owner)');
+        } else {
+          // Any non-owner address is considered a user
+          setUserRole('user');
+          console.log('Connected as regular user');
+        }
+      } catch (error) {
+        console.error("Error checking contract ownership:", error);
+        // Default to user role if we can't determine ownership
         setUserRole('user');
-      } else {
-        setUserRole(null);
       }
 
       // Reset reconnect counter on success
@@ -306,7 +327,27 @@ function App() {
       // Check for blockchain reset signature in the error
       if (error.toString().includes("invalid block tag") || 
           (error.data && error.data.message && error.data.message.includes("invalid block tag"))) {
-        setNeedsReset(true);
+        console.warn("Detected invalid block tag error - may be due to network change or blockchain reset");
+        // Try to determine if this is a network change or a true reset
+        try {
+          const currentNetwork = await (new ethers.providers.Web3Provider(window.ethereum)).getNetwork();
+          const lastKnownNetwork = localStorage.getItem('lastKnownNetwork');
+          
+          // If on a different network than last time, don't trigger reset dialog
+          if (lastKnownNetwork && currentNetwork.chainId.toString() !== lastKnownNetwork) {
+            console.log(`Network changed from ${lastKnownNetwork} to ${currentNetwork.chainId}`);
+            localStorage.setItem('lastKnownNetwork', currentNetwork.chainId.toString());
+            localStorage.setItem('lastKnownBlockNumber', '0'); // Reset block number for new network
+            setIsLoading(true); // Just retry loading
+            return;
+          } else {
+            // Same network but block tag error, likely a true reset
+            setNeedsReset(true);
+          }
+        } catch (netError) {
+          console.error("Error checking network during error recovery:", netError);
+          setNeedsReset(true); // Default to showing reset dialog if we can't determine
+        }
       } else {
         setErrorMessage(`Error connecting to blockchain: ${error.message}`);
         // Increment reconnect attempts counter
@@ -544,7 +585,7 @@ function App() {
                   <li>Restart your local blockchain node with: <code>npx hardhat node</code></li>
                   <li>Redeploy contracts with: <code>npm run deploy:full</code></li>
                   <li>Reset MetaMask by going to Settings → Advanced → Reset Account</li>
-                  <li>Make sure you're using the admin account: <code>0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266</code></li>
+                  <li>Make sure you're using the admin account: <code>${ADMIN_ADDRESS}</code></li>
                 </ol>
               </div>
             </div>
@@ -592,9 +633,7 @@ function App() {
               <small>
                 <strong>Note:</strong> If you're using the local Hardhat network for development, you can use these test accounts:
                 <br />
-                Admin account: 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
-                <br />
-                User account: 0x70997970c51812dc3a010c7d01b50e0d17dc79c8
+                Admin account: ${ADMIN_ADDRESS}
               </small>
             </p>
           </Alert>
@@ -622,14 +661,16 @@ function App() {
         return (
           <div className="text-center mt-5">
             <Alert variant="info">
-              <Alert.Heading>Unauthorized Wallet</Alert.Heading>
-              <p>Connect with an authorized wallet address to access the application</p>
+              <Alert.Heading>Connected as User</Alert.Heading>
+              <p>Your wallet is connected as a regular user.</p>
               <p><strong>Current address:</strong> {account}</p>
-              <p>For testing, connect with one of these addresses:</p>
-              <ul className="list-unstyled">
-                <li>Admin: {ADMIN_ADDRESS}</li>
-                <li>User: {USER_ADDRESS}</li>
-              </ul>
+              <p>To access admin features, please connect with the admin wallet address.</p>
+              <Button 
+                variant="outline-primary" 
+                onClick={handleForceReconnect}
+              >
+                Change Wallet
+              </Button>
             </Alert>
           </div>
         );
