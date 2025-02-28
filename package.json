@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.",
   "dependencies": {
+    "@chainlink/contracts": "^1.3.0",
+    "@openzeppelin/contracts": "^4.9.3",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
     "@testing-library/user-event": "^13.5.0",
@@ -17,7 +19,14 @@
     "start": "BROWSER=./launch-firefox.js react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "chain": "hardhat node",
+    "deploy": "hardhat run scripts/deploy-ai-educator.js --network localhost",
+    "deploy:testnet": "hardhat run scripts/deploy-ai-educator.js --network sepolia",
+    "verify": "hardhat verify --network sepolia",
+    "update-frontend": "node scripts/update-frontend.js",
+    "deploy:full": "npm run deploy && npm run update-frontend",
+    "test:contracts": "hardhat test"
   },
   "author": "eddie@eddiedunn.com",
   "license": "ISC",
@@ -41,7 +50,11 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^1.0.2",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
+    "chai": "^4.3.8",
     "cross-env": "^7.0.3",
+    "dotenv": "^16.3.1",
     "hardhat": "^2.10.1"
   },
   "main": "hardhat.config.js",

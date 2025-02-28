@@ -1,7 +1,7 @@
-import { Navbar, Container, Nav } from 'react-bootstrap'
+import { Navbar, Container, Nav, Badge } from 'react-bootstrap'
 import logo from '../logo.png'
 
-const Navigation = ({ account, userRole }) => {
+const Navigation = ({ account, userRole, tokenBalance }) => {
   return (
     <Navbar className='my-3' expand="lg">
       <Container>
@@ -35,6 +35,11 @@ const Navigation = ({ account, userRole }) => {
           <Nav>
             {account ? (
               <Nav.Item className="d-flex align-items-center">
+                {tokenBalance && (
+                  <Badge bg="primary" className="me-2">
+                    {parseFloat(tokenBalance).toFixed(2)} PZLPT
+                  </Badge>
+                )}
                 <div className="px-3 py-1 border rounded-3 text-muted small">
                   {account.slice(0, 6) + '...' + account.slice(38, 42)}
                 </div>

@@ -1,12 +1,11 @@
 import React from 'react';
-import { Container } from 'react-bootstrap';
 import AdminPanel from '../components/admin/AdminPanel';
 
-const AdminPage = ({ account }) => {
+const AdminPage = ({ account, tokenBalance, puzzlePoints }) => {
   return (
     <>
       <h1 className="my-4 text-center">Admin Interface</h1>
-      <AdminPanel account={account} />
+      <AdminPanel account={account} tokenBalance={tokenBalance} puzzlePoints={puzzlePoints} />
     </>
   );
 };

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Card, Button, ListGroup } from 'react-bootstrap';
+import { Card, Button, ListGroup, Badge } from 'react-bootstrap';
 
-const UserPanel = ({ account, balance }) => {
+const UserPanel = ({ account, balance, tokenBalance, puzzlePoints }) => {
   return (
     <Card className="my-4">
       <Card.Header as="h5">User Dashboard</Card.Header>
@@ -16,7 +16,11 @@ const UserPanel = ({ account, balance }) => {
             <strong>Account:</strong> {account}
           </ListGroup.Item>
           <ListGroup.Item>
-            <strong>Balance:</strong> {balance} ETH
+            <strong>ETH Balance:</strong> {balance} ETH
+          </ListGroup.Item>
+          <ListGroup.Item>
+            <strong>PuzzlePoints Balance:</strong> {' '}
+            <Badge bg="primary">{tokenBalance}</Badge> PZLPT
           </ListGroup.Item>
           <ListGroup.Item>
             <strong>Status:</strong> Active
@@ -24,8 +28,8 @@ const UserPanel = ({ account, balance }) => {
         </ListGroup>
         
         <div className="d-grid gap-2">
-          <Button variant="primary">Perform Action</Button>
-          <Button variant="outline-secondary">View History</Button>
+          <Button variant="primary">View Questions</Button>
+          <Button variant="outline-secondary">My Assessment History</Button>
         </div>
       </Card.Body>
     </Card>

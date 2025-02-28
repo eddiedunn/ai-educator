@@ -20,14 +20,14 @@ npm install
 2. **Start local Hardhat node**
 
 ```bash
-npx hardhat node
+npm run chain
 ```
 
-3. **Deploy smart contracts to local network**
+3. **Deploy smart contracts to local network and update frontend**
 
 In a new terminal:
 ```bash
-npx hardhat run scripts/deploy.js --network localhost
+npm run deploy:full
 ```
 
 4. **Start the React application**
@@ -35,6 +35,47 @@ npx hardhat run scripts/deploy.js --network localhost
 ```bash
 npm start
 ```
+
+### Available Scripts
+
+- `npm start` - Starts the React application
+- `npm run build` - Creates a production build of the React application
+- `npm run chain` - Starts a local Hardhat blockchain
+- `npm run deploy` - Deploys contracts to the local Hardhat network
+- `npm run deploy:testnet` - Deploys contracts to the Sepolia testnet
+- `npm run verify` - Verifies contract source code on Etherscan (Sepolia)
+- `npm run update-frontend` - Updates frontend code with deployed contract addresses
+- `npm run deploy:full` - Deploys contracts and updates frontend in one command
+- `npm run test:contracts` - Runs tests for the smart contracts
+- `npm test` - Runs tests for the React application
+- `npm run eject` - Ejects the Create React App configuration
+
+### Testnet Deployment
+
+To deploy to the Sepolia testnet:
+
+1. Create a `.env` file based on `.env.sample`:
+   ```
+   cp .env.sample .env
+   ```
+
+2. Fill in your:
+   - `SEPOLIA_RPC_URL` - Get from Infura or Alchemy
+   - `PRIVATE_KEY` - Your wallet's private key
+   - `ETHERSCAN_API_KEY` - For contract verification (optional)
+
+3. Make sure you have testnet ETH in your wallet. You can get them from a faucet:
+   - [Sepolia Faucet](https://sepoliafaucet.com/)
+
+4. Deploy to testnet and update frontend:
+   ```
+   npm run deploy:testnet && npm run update-frontend
+   ```
+
+5. Verify your contracts (optional):
+   ```
+   npm run verify <CONTRACT_ADDRESS> <CONSTRUCTOR_ARGS>
+   ```
 
 ### Connect MetaMask to Local Hardhat Network
 
@@ -64,6 +105,7 @@ These are the first two accounts provided by the Hardhat node.
   - `/abis` - Contract ABIs
   - `/components` - React components
 - `/test` - Smart contract tests
+- `/deployments` - Contract addresses for different networks
 
 ## For Hackathon Development
 
