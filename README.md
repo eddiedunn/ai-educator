@@ -8,6 +8,7 @@ A full-stack dApp template with React frontend and Hardhat for smart contract de
 - Node.js
 - npm or yarn
 - MetaMask browser extension
+- macOS or Linux environment
 
 ### Setup
 
@@ -36,6 +37,20 @@ npm run deploy:full
 npm start
 ```
 
+### One-Command Startup (Recommended)
+
+For the most convenient startup experience, use the provided shell script:
+
+```bash
+# Make the script executable (first time only)
+chmod +x start.sh
+
+# Start everything with one command
+./start.sh
+```
+
+This will stop any running processes and start the entire application stack (Hardhat node, contract deployment, and React frontend).
+
 ### Available Scripts
 
 - `npm start` - Starts the React application
@@ -49,6 +64,19 @@ npm start
 - `npm run test:contracts` - Runs tests for the smart contracts
 - `npm test` - Runs tests for the React application
 - `npm run eject` - Ejects the Create React App configuration
+
+### Process Management Scripts
+
+For managing running processes and restarting the application:
+
+- `npm run stop` - Stops any running instances of the app
+- `npm run restart` - Stops any running instances and starts the React app
+- `npm run restart:chain` - Stops any running instances and starts a new Hardhat node
+- `npm run restart:deploy` - Stops any running instances and deploys the contracts
+- `npm run restart:deploy:full` - Stops instances and runs full deployment + frontend update
+- `npm run restart:all` - One command to start everything fresh (chain, deploy, frontend)
+
+See [RESTART.md](RESTART.md) for detailed documentation on process management.
 
 ### Testnet Deployment
 

@@ -16,7 +16,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "BROWSER=./launch-firefox.js react-scripts start",
+    "start": "cross-env BROWSER=./launch-firefox.js react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
@@ -26,7 +26,13 @@
     "verify": "hardhat verify --network sepolia",
     "update-frontend": "node scripts/update-frontend.js",
     "deploy:full": "npm run deploy && npm run update-frontend",
-    "test:contracts": "hardhat test"
+    "test:contracts": "hardhat test",
+    "stop": "node scripts/manage-app.js",
+    "restart": "node scripts/restart-app.js npm start",
+    "restart:chain": "node scripts/restart-app.js npm run chain",
+    "restart:deploy": "node scripts/restart-app.js npm run deploy",
+    "restart:deploy:full": "node scripts/restart-app.js npm run deploy:full",
+    "restart:all": "node scripts/restart-app.js \"npm run chain & sleep 5 && npm run deploy:full && npm start\""
   },
   "author": "eddie@eddiedunn.com",
   "license": "ISC",

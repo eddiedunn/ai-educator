@@ -20,7 +20,7 @@ const UserPanel = ({ account, balance, tokenBalance, puzzlePoints }) => {
           </ListGroup.Item>
           <ListGroup.Item>
             <strong>PuzzlePoints Balance:</strong> {' '}
-            <Badge bg="primary">{tokenBalance}</Badge> PZLPT
+            {tokenBalance} PP
           </ListGroup.Item>
           <ListGroup.Item>
             <strong>Status:</strong> Active
