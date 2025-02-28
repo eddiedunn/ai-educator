@@ -241,7 +241,7 @@ function App() {
     if (errorMessage) {
       return (
         <Container className="mt-5">
-          <Alert variant="danger">
+          <Alert variant="danger" style={{ borderRadius: '10px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
             <Alert.Heading>Error</Alert.Heading>
             <p>{errorMessage}</p>
             <hr />
@@ -260,12 +260,12 @@ function App() {
     if (!account) {
       return (
         <div className="container mt-5">
-          <div className="text-center p-5">
-            <h4>Please connect your wallet to continue</h4>
+          <div className="text-center p-5" style={{ backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)' }}>
+            <h4 style={{ color: 'var(--neutral-light)', marginBottom: '20px' }}>Please connect your wallet to continue</h4>
             <Button 
               variant="primary" 
               onClick={() => window.ethereum.request({ method: 'eth_requestAccounts' })}
-              className="mt-3"
+              style={{ borderRadius: '25px', paddingLeft: '25px', paddingRight: '25px' }}
             >
               Connect MetaMask
             </Button>
@@ -297,13 +297,14 @@ function App() {
       default:
         // Default case - should rarely happen, but just in case
         return (
-          <div className="text-center mt-4">
-            <p>Loading your account information...</p>
+          <div className="text-center mt-4" style={{ padding: '20px', backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <p style={{ color: 'var(--neutral-light)' }}>Loading your account information...</p>
             <Button 
               variant="outline-primary" 
               size="sm" 
               onClick={handleForceReconnect}
               className="mt-2"
+              style={{ borderRadius: '20px' }}
             >
               Change Wallet
             </Button>
@@ -329,6 +330,7 @@ function App() {
             }
           }}
           className="d-block mx-auto my-4"
+          style={{ borderRadius: '25px', paddingLeft: '25px', paddingRight: '25px' }}
         >
           Connect Wallet
         </Button>

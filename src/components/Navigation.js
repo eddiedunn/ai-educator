@@ -1,16 +1,25 @@
 import { Navbar, Container, Nav, Badge } from 'react-bootstrap'
-import logo from '../logo.png'
+import logo from '../adeptifylogo.png'
 
 const Navigation = ({ account, userRole, tokenBalance }) => {
   return (
     <>
-      <Navbar className='my-3' expand="lg">
+      <Navbar className='my-3' expand="lg" style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 12px rgba(0, 0, 0, 0.05)' }}>
         <Container>
           <Navbar.Brand href="/" className="d-flex align-items-center">
-            <img src={logo} width="40" height="40" className="me-2" alt="Logo" />
-            <span className="d-none d-sm-inline">AI Educator</span>
-            {userRole === 'admin' && <span className="ms-2 badge bg-danger">Admin</span>}
-            {userRole === 'user' && <span className="ms-2 badge bg-success">User</span>}
+            <img 
+              src={logo} 
+              height="40" 
+              className="brand-logo" 
+              alt="Logo" 
+              style={{ 
+                width: 'auto', 
+                maxWidth: '200px',
+                marginRight: '1rem' 
+              }} 
+            />
+            {userRole === 'admin' && <span className="ms-2 badge" style={{ backgroundColor: 'var(--danger)' }}>Admin</span>}
+            {userRole === 'user' && <span className="ms-2 badge" style={{ backgroundColor: 'var(--success)' }}>User</span>}
           </Navbar.Brand>
           
           <Navbar.Toggle aria-controls="basic-navbar-nav" />
@@ -18,15 +27,15 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
             <Nav className="me-auto">
               {userRole === 'admin' && (
                 <>
-                  <h2 className="mb-0 nav-link fw-bold">Question Set Management</h2>
+                  <h2 className="mb-0 nav-link fw-bold" style={{ color: 'var(--neutral-light)' }}>Question Set Management</h2>
                 </>
               )}
               
               {userRole === 'user' && (
                 <>
-                  <Nav.Link href="#dashboard">Dashboard</Nav.Link>
-                  <Nav.Link href="#completed">Completed</Nav.Link>
-                  <Nav.Link href="#leaderboard">Leaderboard</Nav.Link>
+                  <Nav.Link href="#dashboard" style={{ color: 'var(--primary)' }}>Dashboard</Nav.Link>
+                  <Nav.Link href="#completed" style={{ color: 'var(--neutral-light)' }}>Completed</Nav.Link>
+                  <Nav.Link href="#leaderboard" style={{ color: 'var(--neutral-light)' }}>Leaderboard</Nav.Link>
                 </>
               )}
             </Nav>
@@ -35,11 +44,11 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
               {account ? (
                 <Nav.Item className="d-flex align-items-center">
                   {tokenBalance && (
-                    <Badge bg="primary" className="me-2">
+                    <Badge bg="primary" className="me-2" style={{ backgroundColor: 'var(--secondary)', color: 'var(--neutral-light)' }}>
                       {parseFloat(tokenBalance).toFixed(2)} PZLPT
                     </Badge>
                   )}
-                  <div className="px-2 py-1 rounded-2 text-truncate" style={{ maxWidth: '180px' }}>
+                  <div className="account-pill">
                     {account.slice(0, 6) + '...' + account.slice(38, 42)}
                   </div>
                 </Nav.Item>
