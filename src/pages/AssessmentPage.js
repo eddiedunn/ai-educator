@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Card, Button, Form, Alert, Spinner, ProgressBar, Container } from 'react-bootstrap';
 import { retrieveQuestionSet, submitAnswersToBlockchain, storeAnswers } from '../utils/answerStorage';
 import { debugLog, isDebugMode } from '../utils/debug';
@@ -12,7 +12,6 @@ const { useAccounts } = metaMaskHooks;
 
 const AssessmentPage = ({ questionManager }) => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [currentQuestion, setCurrentQuestion] = useState(0);

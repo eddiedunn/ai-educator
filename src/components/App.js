@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Container, Alert, Button } from 'react-bootstrap'
 import { ethers } from 'ethers'
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -17,7 +17,7 @@ import PuzzlePointsArtifact from '../abis/contracts/PuzzlePoints.sol/PuzzlePoint
 import QuestionManagerArtifact from '../abis/contracts/QuestionManager.sol/QuestionManager.json';
 
 // Import the contract addresses and config from our config file
-import { CONTRACT_ADDRESSES, TEST_ACCOUNTS } from '../config';
+import { CONTRACT_ADDRESSES } from '../config';
 
 // Contract addresses from config file, which gets updated by the update-config.js script
 const PUZZLE_POINTS_ADDRESS = CONTRACT_ADDRESSES.puzzlePoints;
@@ -119,7 +119,7 @@ function App() {
     setErrorMessage(null);
   };
   
-  const loadBlockchainData = async () => {
+  const loadBlockchainData = useCallback(async () => {
     // Prevent infinite loading if we've tried too many times
     if (reconnectAttempts > 3) {
       setIsLoading(false);
@@ -215,9 +215,12 @@ function App() {
       const signer = provider.getSigner();
       
       // Load contract instances
+      let puzzlePointsContract;
+      let questionManagerContract;
+      
       try {
         // PuzzlePoints contract
-        const puzzlePointsContract = new ethers.Contract(
+        puzzlePointsContract = new ethers.Contract(
           PUZZLE_POINTS_ADDRESS,
           PuzzlePointsArtifact.abi,
           signer
@@ -253,7 +256,7 @@ function App() {
         }
         
         // QuestionManager contract
-        const questionManagerContract = new ethers.Contract(
+        questionManagerContract = new ethers.Contract(
           QUESTION_MANAGER_ADDRESS,
           QuestionManagerArtifact.abi,
           signer
@@ -280,7 +283,7 @@ function App() {
       // Set user role based on connected address
       try {
         // Check if connected wallet is the owner of the QuestionManager contract
-        const owner = await questionManager.owner();
+        const owner = await questionManagerContract.owner();
         const lowerCaseAccount = account.toLowerCase();
         const lowerCaseOwner = owner.toLowerCase();
         
@@ -340,7 +343,7 @@ function App() {
       
       setIsLoading(false);
     }
-  };
+  }, [reconnectAttempts]);
 
   // Load blockchain data when isLoading is true
   useEffect(() => {
