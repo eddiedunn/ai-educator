@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Badge, Alert, Spinner } from 'react-bootstrap';
+import { Card, Row, Col, Button, Badge, Alert, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
 const AvailableQuestionSets = ({ questionManager }) => {
@@ -162,102 +162,102 @@ const AvailableQuestionSets = ({ questionManager }) => {
 
   if (loading && questionSets.length === 0) {
     return (
-      <Card className="mb-4 available-question-sets">
-        <Card.Header as="h5">Available Question Sets</Card.Header>
-        <Card.Body className="text-center py-5">
-          <Spinner animation="border" role="status" />
-          <p className="mt-3">Loading available question sets...</p>
-        </Card.Body>
-      </Card>
+      <div className="mt-5">
+        <h1 className="text-center mb-4">Available Assessments</h1>
+        <Card className="mb-4 available-question-sets shadow">
+          <Card.Header as="h5">Loading Assessments</Card.Header>
+          <Card.Body className="text-center py-5">
+            <Spinner animation="border" role="status" />
+            <p className="mt-3">Loading available assessments...</p>
+          </Card.Body>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="mb-4 available-question-sets">
-      <Card.Header as="h5">Available Question Sets</Card.Header>
-      <Card.Body>
-        {error && (
-          <Alert variant="danger" dismissible onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-        
-        {questionSets.length === 0 ? (
-          <Alert variant="info">
-            <p>No question sets are currently available. Please check back later.</p>
+    <div className="mt-5">
+      <h1 className="text-center mb-4">Available Assessments</h1>
+      <Card className="mb-4 available-question-sets shadow">
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <h5 className="mb-0">Assessment Catalog</h5>
+          {questionSets.length > 0 && (
             <Button 
-              variant="outline-secondary" 
+              variant="outline-primary" 
               size="sm" 
-              className="mt-2" 
               onClick={fetchQuestionSets}
             >
-              Refresh Question Sets
+              Refresh Assessments
             </Button>
-          </Alert>
-        ) : (
-          <>
-            <div className="mb-3">
+          )}
+        </Card.Header>
+        <Card.Body>
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+          
+          {questionSets.length === 0 ? (
+            <Alert variant="info">
+              <p>No assessments are currently available. Please check back later.</p>
               <Button 
-                variant="outline-primary" 
+                variant="outline-secondary" 
                 size="sm" 
+                className="mt-2" 
                 onClick={fetchQuestionSets}
               >
-                Refresh Question Sets
+                Refresh Assessments
               </Button>
-            </div>
-            <Table responsive striped hover>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Questions</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {questionSets.map(set => (
-                  <tr key={set.id}>
-                    <td>{set.id}</td>
-                    <td>{set.questionCount}</td>
-                    <td>
-                      {set.timestamp ? (
-                        new Date(set.timestamp * 1000).toLocaleDateString()
-                      ) : (
-                        "N/A"
-                      )}
-                    </td>
-                    <td>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleStartAssessment(set.id)}
-                        disabled={processingId === set.id}
-                      >
-                        {processingId === set.id ? (
-                          <>
-                            <Spinner
-                              as="span"
-                              animation="border"
-                              size="sm"
-                              role="status"
-                              aria-hidden="true"
-                              className="me-1"
-                            />
-                            Loading...
-                          </>
-                        ) : (
-                          "Start Assessment"
-                        )}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </>
-        )}
-      </Card.Body>
-    </Card>
+            </Alert>
+          ) : (
+            <Row xs={1} md={2} lg={3} className="g-3">
+              {questionSets.map(set => (
+                <Col key={set.id}>
+                  <Card className="h-100 shadow-sm">
+                    <Card.Header className="bg-primary text-white">
+                      <h6 className="mb-0 text-truncate" title={set.id}>
+                        {set.id}
+                      </h6>
+                    </Card.Header>
+                    <Card.Body>
+                      <Card.Text>
+                        <strong>Questions:</strong> {set.questionCount}
+                        <br />
+                        <strong>Created:</strong> {set.timestamp ? new Date(set.timestamp * 1000).toLocaleDateString() : "N/A"}
+                      </Card.Text>
+                      <div className="d-grid gap-2">
+                        <Button
+                          variant="primary"
+                          onClick={() => handleStartAssessment(set.id)}
+                          disabled={processingId === set.id}
+                        >
+                          {processingId === set.id ? (
+                            <>
+                              <Spinner
+                                as="span"
+                                animation="border"
+                                size="sm"
+                                role="status"
+                                aria-hidden="true"
+                                className="me-1"
+                              />
+                              Loading...
+                            </>
+                          ) : (
+                            "Start Assessment"
+                          )}
+                        </Button>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+        </Card.Body>
+      </Card>
+    </div>
   );
 };
 

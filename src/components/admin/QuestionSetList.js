@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Badge, Alert, Spinner } from 'react-bootstrap';
+import { Card, Row, Col, Button, Badge, Alert, Spinner } from 'react-bootstrap';
 import { ethers } from 'ethers';
 import QuestionSetDetail from './QuestionSetDetail';
 
@@ -220,84 +220,79 @@ const QuestionSetList = ({ questionManager, refreshCounter, onQuestionSetUpdated
               No question sets found. Create your first question set above.
             </Alert>
           ) : (
-            <Table responsive striped hover>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Questions</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {questionSets.map(set => (
-                  <tr key={set.id}>
-                    <td>{set.id}</td>
-                    <td>{set.questionCount}</td>
-                    <td>
+            <Row xs={1} md={2} lg={3} className="g-3">
+              {questionSets.map(set => (
+                <Col key={set.id}>
+                  <Card className="h-100 shadow-sm">
+                    <Card.Header className="d-flex justify-content-between align-items-center">
+                      <span className="text-truncate" style={{ maxWidth: '200px' }} title={set.id}>
+                        {set.id}
+                      </span>
                       {set.onChain ? (
-                        <Badge bg="success">On Blockchain</Badge>
+                        <Badge bg="success">Blockchain</Badge>
                       ) : (
                         <Badge bg="warning">Local Only</Badge>
                       )}
-                    </td>
-                    <td>
-                      {set.timestamp ? (
-                        new Date(set.timestamp).toLocaleDateString()
-                      ) : (
-                        "N/A"
-                      )}
-                    </td>
-                    <td>
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        className="me-1"
-                        onClick={() => handleViewQuestionSet(set.id)}
-                      >
-                        View
-                      </Button>
-                      
-                      {!set.onChain && (
-                        <>
-                          <Button
-                            variant="outline-success"
-                            size="sm"
-                            className="me-1"
-                            onClick={() => handleCommitToBlockchain(set.id)}
-                            disabled={commitLoading[set.id]}
-                          >
-                            {commitLoading[set.id] ? (
-                              <>
-                                <Spinner
-                                  as="span"
-                                  animation="border"
-                                  size="sm"
-                                  role="status"
-                                  aria-hidden="true"
-                                />
-                                <span className="visually-hidden">Committing...</span>
-                              </>
-                            ) : (
-                              "Commit"
-                            )}
-                          </Button>
-                          
-                          <Button
-                            variant="outline-danger"
-                            size="sm"
-                            onClick={() => handleDeleteQuestionSet(set.id)}
-                          >
-                            Delete
-                          </Button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+                    </Card.Header>
+                    <Card.Body>
+                      <Card.Text>
+                        <strong>Questions:</strong> {set.questionCount}
+                        <br />
+                        <strong>Created:</strong> {set.timestamp ? new Date(set.timestamp).toLocaleDateString() : "N/A"}
+                      </Card.Text>
+                    </Card.Body>
+                    <Card.Footer>
+                      <div className="d-flex gap-2 justify-content-between">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={() => handleViewQuestionSet(set.id)}
+                        >
+                          View
+                        </Button>
+                        
+                        <div>
+                          {!set.onChain && (
+                            <>
+                              <Button
+                                variant="outline-success"
+                                size="sm"
+                                className="me-1"
+                                onClick={() => handleCommitToBlockchain(set.id)}
+                                disabled={commitLoading[set.id]}
+                              >
+                                {commitLoading[set.id] ? (
+                                  <>
+                                    <Spinner
+                                      as="span"
+                                      animation="border"
+                                      size="sm"
+                                      role="status"
+                                      aria-hidden="true"
+                                    />
+                                    <span className="visually-hidden">Committing...</span>
+                                  </>
+                                ) : (
+                                  "Commit"
+                                )}
+                              </Button>
+                              
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={() => handleDeleteQuestionSet(set.id)}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </Card.Footer>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
           )}
         </Card.Body>
       </Card>

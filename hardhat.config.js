@@ -23,9 +23,13 @@ module.exports = {
   networks: {
     hardhat: {
       mining: {
-        auto: false,       // disables auto-mining of every transaction
-        interval: 1000     // mines a new block every 5000ms (5 seconds)
-      }
+        auto: true,
+        //auto: false,       // disables auto-mining of every transaction
+        //interval: 250     // mines a new block every 250 ms
+      },
+      allowUnlimitedContractSize: true,
+      gas: 100000000,
+      blockGasLimit: 100000000,
     },
     localhost: {
       url: "http://127.0.0.1:8545",
@@ -50,5 +54,15 @@ module.exports = {
     currency: "USD",
     outputFile: "gas-report.txt",
     noColors: true,
+  },
+  mocha: {
+    timeout: 200000 // 200 seconds max for running tests
+  },
+  coverage: {
+    provider: "hardhat",
+    allowUnlimitedContractSize: true,
+    gas: 100000000,
+    blockGasLimit: 100000000,
+    timeout: 600000
   },
 };

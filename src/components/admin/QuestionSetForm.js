@@ -1,13 +1,12 @@
-import React, { useState, useRef } from 'react';
-import { Form, Button, Card, Alert, Spinner, Modal, ProgressBar, InputGroup, Badge, Tabs, Tab } from 'react-bootstrap';
+import React, { useState, useCallback } from 'react';
+import { Form, Button, Card, Alert, Spinner, Modal, ProgressBar } from 'react-bootstrap';
 import { ethers } from 'ethers';
-import { getOpenAIApiKey } from '../../config';
+import { getOpenAIApiKey, APP_SETTINGS } from '../../config';
+import { useDropzone } from 'react-dropzone';
 
 const QuestionSetForm = ({ questionManager, onQuestionSetCreated }) => {
   // Form states
   const [name, setName] = useState('');
-  const [sourceDocument, setSourceDocument] = useState('');
-  const [useAI, setUseAI] = useState(true);
   const [numberOfQuestions, setNumberOfQuestions] = useState(5);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -15,13 +14,9 @@ const QuestionSetForm = ({ questionManager, onQuestionSetCreated }) => {
   const [success, setSuccess] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [aiGenerationProgress, setAiGenerationProgress] = useState(0);
-  const [commitToBlockchain, setCommitToBlockchain] = useState(false);
-  const [fileUploadName, setFileUploadName] = useState('');
-  const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [aiStatus, setAiStatus] = useState('');
-  const [filePreview, setFilePreview] = useState('');
-  const [activeTab, setActiveTab] = useState('upload');
-  const fileInputRef = useRef(null);
+  const [sourceDocument, setSourceDocument] = useState('');
+  const [sourceDocumentName, setSourceDocumentName] = useState('');
   
   // Using free-form text questions instead of multiple-choice
   const questionType = 'freeform';
@@ -38,31 +33,53 @@ Answer: [expected answer]
 Explanation: [explanation]`
   };
   
+  // Handle file drop with react-dropzone
+  const onDrop = useCallback(acceptedFiles => {
+    const file = acceptedFiles[0];
+    if (file) {
+      setSourceDocumentName(file.name);
+      
+      // Extract base filename without extension to use as set name
+      const baseName = file.name.split('.')[0];
+      if (!name) {
+        setName(baseName);
+      }
+      
+      const reader = new FileReader();
+      
+      reader.onload = () => {
+        const text = reader.result;
+        setSourceDocument(text);
+      };
+      
+      reader.readAsText(file);
+    }
+  }, [name]);
+  
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+    onDrop, 
+    accept: {
+      'text/plain': ['.txt'],
+      'text/markdown': ['.md', '.markdown'],
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+    },
+    multiple: false
+  });
+  
   // Updated AI question generation with actual OpenAI API integration
-  const generateQuestionsWithAI = async (document, count) => {
+  const generateQuestionsWithAI = async (count) => {
     setLoading(true);
     setAiGenerationProgress(0);
-    setAiStatus('Analyzing document content...');
+    setAiStatus('Initializing AI question generation...');
     
     try {
       setAiGenerationProgress(10);
       setAiStatus('Connecting to OpenAI API...');
       
-      // Debug: Log all environment variables that start with REACT_APP
-      console.log('Environment Variables:', Object.keys(process.env)
-        .filter(key => key.startsWith('REACT_APP_'))
-        .reduce((obj, key) => {
-          obj[key] = key === 'REACT_APP_OPENAI_API_KEY' 
-            ? (process.env[key] ? 'API KEY EXISTS' : 'API KEY MISSING') 
-            : process.env[key];
-          return obj;
-        }, {})
-      );
-      
       // Get API key using our helper function (from config.js)
       const apiKey = getOpenAIApiKey();
-      console.log('API Key exists:', !!apiKey);
-      console.log('API Key starts with:', apiKey?.substring(0, 7));
       
       if (!apiKey) {
         throw new Error('OpenAI API key is missing. Please check your configuration or environment variables.');
@@ -74,6 +91,23 @@ Explanation: [explanation]`
       setAiGenerationProgress(20);
       setAiStatus('Sending request to OpenAI...');
       
+      // Use document content if available, otherwise default prompt
+      let contentPrompt;
+      if (sourceDocument && sourceDocument.trim() !== '') {
+        // Limit document length to avoid token limit issues
+        const maxLength = 12000;
+        const trimmedDocument = sourceDocument.length > maxLength 
+          ? sourceDocument.substring(0, maxLength) + '...(content truncated for length)'
+          : sourceDocument;
+        
+        contentPrompt = promptTemplates.freeform
+          .replace('{count}', count)
+          .replace('{document}', trimmedDocument);
+      } else {
+        // No document, use default prompt
+        contentPrompt = `Generate ${count} open-ended questions about web3, blockchain technology, and smart contracts. Include a mix of technical and conceptual questions suitable for a hackathon workshop.`;
+      }
+      
       // Using fetch to call OpenAI Chat Completions API
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -82,7 +116,7 @@ Explanation: [explanation]`
           'Authorization': `Bearer ${cleanApiKey}`
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini", // Using GPT-4o-mini as requested
+          model: "gpt-4o-mini", // Using GPT-4o-mini
           messages: [
             {
               role: "system",
@@ -90,9 +124,7 @@ Explanation: [explanation]`
             },
             {
               role: "user",
-              content: `Generate ${count} open-ended questions based on the following content. For each question, include the expected answer and a brief explanation.
-              
-Content: ${document}
+              content: `${contentPrompt}
 
 Format each question exactly as:
 Question: [question text]
@@ -101,432 +133,214 @@ Explanation: [explanation]`
             }
           ],
           temperature: 0.7,
-          max_tokens: 4000
+          max_tokens: 2000
         })
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
       }
+      
+      // Extract and parse OpenAI response
+      setAiGenerationProgress(60);
+      setAiStatus('Processing response...');
       
       const data = await response.json();
-      setAiGenerationProgress(70);
-      setAiStatus('Processing AI response...');
+      const responseText = data.choices[0].message.content;
       
-      // Parse the AI response and extract questions
-      const aiResponseText = data.choices[0].message.content;
-      const questionBlocks = aiResponseText.split(/Question:/).filter(block => block.trim().length > 0);
+      console.log('AI Response:', responseText);
       
-      const parsedQuestions = [];
+      setAiGenerationProgress(80);
+      setAiStatus('Parsing questions...');
       
-      for (let i = 0; i < questionBlocks.length; i++) {
-        setAiGenerationProgress(70 + ((i + 1) / questionBlocks.length) * 25);
-        setAiStatus(`Processing question ${i+1} of ${questionBlocks.length}...`);
-        
-        try {
-          const block = "Question:" + questionBlocks[i];
-          
-          // Extract question text
-          const questionMatch = block.match(/Question:(.*?)(?=Answer:)/s);
-          const questionText = questionMatch ? questionMatch[1].trim() : "";
-          
-          // Extract answer
-          const answerMatch = block.match(/Answer:(.*?)(?=Explanation:)/s);
-          const answerText = answerMatch ? answerMatch[1].trim() : "";
-          
-          // Extract explanation
-          const explanationMatch = block.match(/Explanation:(.*?)(?=$|\n\s*Question:)/s);
-          const explanation = explanationMatch ? explanationMatch[1].trim() : "";
-          
-          if (questionText && answerText) {
-            parsedQuestions.push({
-              id: `q${i+1}`,
-              questionText,
-              answerHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(answerText)),
-              answerText, // Keep the plain text answer for display purposes
-              explanation
-            });
-          }
-        } catch (parseError) {
-          console.error(`Error parsing question ${i+1}:`, parseError);
-        }
-      }
+      // Parse the generated questions from the response
+      const questions = parseQuestionsFromAIResponse(responseText);
       
       setAiGenerationProgress(100);
-      setAiStatus('Question generation complete!');
+      setAiStatus('Questions generated successfully!');
       
-      return parsedQuestions;
+      return questions;
     } catch (error) {
-      console.error('Error generating questions:', error);
-      throw new Error(`Failed to generate questions with AI: ${error.message}`);
+      console.error('Error generating questions with AI:', error);
+      throw new Error(`Failed to generate questions: ${error.message}`);
     } finally {
-      setTimeout(() => {
-        setLoading(false);
-        setAiStatus('');
-      }, 500);
+      setLoading(false);
     }
   };
-
-  // Enhanced file upload handler with preview and more formats
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Check file type
-    const fileType = file.type;
-    const fileName = file.name;
-    const fileExtension = fileName.split('.').pop().toLowerCase();
+  
+  // Parse questions from OpenAI response
+  const parseQuestionsFromAIResponse = (responseText) => {
+    const questions = [];
+    const lines = responseText.split('\n');
     
-    const allowedTypes = ['text/plain', 'text/markdown', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const allowedExtensions = ['txt', 'md', 'pdf', 'docx'];
+    let currentQuestion = null;
     
-    if (!allowedTypes.includes(fileType) && !allowedExtensions.includes(fileExtension)) {
-      setError('Please upload only text, markdown, PDF, or Word files (.txt, .md, .pdf, .docx)');
-      return;
-    }
-
-    setFileUploadName(fileName);
-
-    // For PDF and Word files in a real app, you would send to backend for processing
-    if (fileExtension === 'pdf' || fileExtension === 'docx') {
-      // Simulate processing of PDF/DOCX
-      setLoading(true);
-      setAiStatus('Processing document...');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
       
-      setTimeout(() => {
-        // In a real app, this would contain the extracted text from the PDF/DOCX
-        const extractedText = `Sample extracted text from ${fileName}.\n\nThis would contain the actual content extracted from your ${fileExtension.toUpperCase()} file using a document processing library on the backend.\n\nFor demonstration purposes, we're showing this placeholder text.`;
-        
-        setSourceDocument(extractedText);
-        setFilePreview(extractedText.substring(0, 200) + '...');
-        setLoading(false);
-        setAiStatus('');
-        
-        // Suggest a name based on the file
-        if (!name.trim()) {
-          const suggestedName = fileName.split('.')[0];
-          setName(suggestedName);
+      // Skip empty lines
+      if (!line) continue;
+      
+      if (line.startsWith('Question:')) {
+        // Start a new question
+        if (currentQuestion) {
+          questions.push(currentQuestion);
         }
-      }, 1500);
-      
-      return;
-    }
-
-    // For text and markdown files
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target.result;
-      setSourceDocument(content);
-      setFilePreview(content.substring(0, 200) + '...');
-      
-      // Suggest a name based on the file
-      if (!name.trim()) {
-        const suggestedName = fileName.split('.')[0];
-        setName(suggestedName);
-      }
-    };
-    
-    reader.onerror = () => {
-      setError('Error reading file: ' + reader.error);
-    };
-    
-    reader.readAsText(file);
-  };
-
-  // Clear file upload
-  const handleClearFile = () => {
-    setFileUploadName('');
-    setSourceDocument('');
-    setFilePreview('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // Add a dedicated function for blockchain submission with better error handling
-  const submitToBlockchain = async (questionSet) => {
-    if (!questionManager) {
-      throw new Error('Question manager contract not connected');
-    }
-    
-    setAiStatus('Preparing blockchain submission...');
-    
-    // Check if we're connected to the right network
-    try {
-      const network = await questionManager.provider.getNetwork();
-      console.log("Connected to network:", network);
-      
-      // Get signer account
-      const signer = await questionManager.signer.getAddress();
-      console.log("Submitting from account:", signer);
-      
-      // Check if account has ETH balance
-      const balance = await questionManager.provider.getBalance(signer);
-      console.log("Account balance:", ethers.utils.formatEther(balance), "ETH");
-      
-      if (balance.eq(0)) {
-        throw new Error('Your account has no ETH to pay for transaction fees');
-      }
-    } catch (error) {
-      console.error("Network connection error:", error);
-      throw new Error(`Network connection error: ${error.message}`);
-    }
-    
-    try {
-      setAiStatus('Submitting to blockchain...');
-      
-      // First check if this ID already exists
-      try {
-        const exists = await questionManager.questionSets(questionSet.id);
-        if (exists.contentHash !== "0x0000000000000000000000000000000000000000000000000000000000000000") {
-          throw new Error('A question set with this name already exists on the blockchain');
-        }
-      } catch (error) {
-        // If the error isn't about the ID already existing, rethrow it
-        if (!error.message.includes('already exists')) {
-          console.error("Error checking if ID exists:", error);
-        }
-      }
-      
-      // Gas estimation
-      let gasEstimate;
-      try {
-        gasEstimate = await questionManager.estimateGas.submitQuestionSetHash(
-          questionSet.id,
-          questionSet.contentHash,
-          questionSet.questionCount
-        );
-        console.log("Gas estimate:", gasEstimate.toString());
-      } catch (error) {
-        console.error("Gas estimation failed:", error);
         
-        // Try to extract more specific error
-        if (error.error && error.error.message) {
-          throw new Error(`Transaction will fail: ${error.error.message}`);
-        } else if (error.message && error.message.includes("execution reverted")) {
-          const revertMsg = error.message.split("execution reverted:")[1]?.trim() || "unknown reason";
-          throw new Error(`Contract rejected transaction: ${revertMsg}`);
+        currentQuestion = {
+          id: `q_${Date.now()}_${questions.length}`,
+          questionText: line.substring('Question:'.length).trim(),
+          answerText: '',
+          explanation: ''
+        };
+      } else if (line.startsWith('Answer:') && currentQuestion) {
+        currentQuestion.answerText = line.substring('Answer:'.length).trim();
+      } else if (line.startsWith('Explanation:') && currentQuestion) {
+        currentQuestion.explanation = line.substring('Explanation:'.length).trim();
+      } else if (currentQuestion) {
+        // Append to the last property we were setting
+        if (currentQuestion.explanation) {
+          currentQuestion.explanation += ' ' + line;
+        } else if (currentQuestion.answerText) {
+          currentQuestion.answerText += ' ' + line;
         } else {
-          throw new Error(`Transaction will fail: ${error.message}`);
+          currentQuestion.questionText += ' ' + line;
         }
       }
-      
-      // Execute transaction with higher gas limit for safety
-      const gasLimit = gasEstimate.mul(120).div(100); // Add 20% buffer
-      const tx = await questionManager.submitQuestionSetHash(
-        questionSet.id,
-        questionSet.contentHash,
-        questionSet.questionCount,
-        { gasLimit }
-      );
-      
-      console.log("Transaction sent:", tx.hash);
-      setAiStatus('Waiting for transaction confirmation...');
-      
-      const receipt = await tx.wait();
-      console.log("Transaction confirmed in block:", receipt.blockNumber);
-      setAiStatus('Transaction confirmed!');
-      
-      return receipt;
-    } catch (error) {
-      console.error("Blockchain submission error:", error);
-      
-      // Format a user-friendly error message
-      let errorMessage = "Failed to submit to blockchain";
-      
-      if (error.code === 4001) {
-        errorMessage = "Transaction rejected by user";
-      } else if (error.message) {
-        errorMessage = error.message;
-        // Clean up common MetaMask error messages
-        if (errorMessage.includes("Internal JSON-RPC error")) {
-          errorMessage = "Contract rejected the transaction. Possible reasons: insufficient permissions, invalid inputs, or contract error";
-        }
-      }
-      
-      throw new Error(errorMessage);
     }
+    
+    // Add the last question if exists
+    if (currentQuestion) {
+      questions.push(currentQuestion);
+    }
+    
+    return questions;
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate name (question set ID)
-    const nameValue = name.trim();
-    if (!nameValue) {
-      setError('Please provide a name for the question set');
-      return;
-    }
-    
-    // Additional validation for question set ID format
-    if (!/^[a-zA-Z0-9_-]+$/.test(nameValue)) {
-      setError('Question set name should only contain letters, numbers, underscores, and hyphens');
-      return;
-    }
-    
-    if (useAI && !sourceDocument.trim()) {
-      setError('Please provide a source document for AI question generation');
-      return;
-    }
     
     try {
       setLoading(true);
       setError(null);
       
-      let questionData = [];
-      
-      if (useAI) {
-        // Generate questions with AI
-        questionData = await generateQuestionsWithAI(sourceDocument, numberOfQuestions);
-      } else {
-        // Use manually entered questions
-        questionData = questions;
+      if (!name.trim()) {
+        throw new Error('Please enter a name for the question set');
       }
       
-      if (!questionData || questionData.length === 0) {
-        throw new Error('No questions were generated or provided');
+      if (numberOfQuestions <= 0) {
+        throw new Error('Please set a valid number of questions to generate');
       }
       
-      // Calculate content hash from the full question set data
-      const contentString = JSON.stringify(questionData);
-      console.log("Content string length:", contentString.length);
+      // Generate questions with AI
+      let questionData = await generateQuestionsWithAI(numberOfQuestions);
       
-      // Ensure we're creating a valid bytes32 hash
-      let contentHash;
-      try {
-        contentHash = ethers.utils.keccak256(
-          ethers.utils.toUtf8Bytes(contentString)
-        );
-        console.log("Generated content hash:", contentHash);
-        
-        // Verify it's a valid bytes32 value
-        if (!contentHash.startsWith('0x') || contentHash.length !== 66) {
-          console.warn("Warning: Content hash may not be properly formatted:", contentHash);
+      if (questionData.length === 0) {
+        throw new Error('Failed to generate any valid questions');
+      }
+      
+      // Process questions to create the final format with answer hashes
+      const finalQuestions = questionData.map(q => {
+        // If the question already has an answerHash, use it
+        if (q.answerHash) {
+          return q;
         }
-      } catch (error) {
-        console.error("Error generating content hash:", error);
-        setError(`Failed to generate content hash: ${error.message}`);
-        setLoading(false);
-        return;
-      }
+        
+        // Otherwise, create the hash
+        const answerHash = ethers.utils.keccak256(
+          ethers.utils.toUtf8Bytes(q.answerText || q.answer || '')
+        );
+        
+        return {
+          id: q.id || Math.random().toString(36).substring(2, 11),
+          questionText: q.questionText || q.question || '',
+          answerText: q.answerText || q.answer || '',
+          answerHash: answerHash,
+          explanation: q.explanation || ''
+        };
+      });
       
-      // Create question set object
-      const questionSet = {
-        id: name,
-        questionCount: questionData.length,
-        contentHash,
-        timestamp: Date.now(),
-        questionType: useAI ? questionType : 'custom',
-        sourceDocumentPreview: sourceDocument.substring(0, 200),
-        questions: questionData
+      // Create JSON representation
+      const questionSetData = {
+        id: `set_${Date.now()}`,
+        name: name,
+        questionCount: finalQuestions.length,
+        questions: finalQuestions,
+        metadata: {
+          createdAt: new Date().toISOString(),
+          generatedWithAI: true,
+          aiModel: "gpt-4o-mini",
+          sourceDocumentProvided: !!sourceDocument,
+          sourceDocumentName: sourceDocumentName || null,
+          sourceDocumentPreview: sourceDocument ? sourceDocument.substring(0, 200) + '...' : null
+        }
       };
       
-      // If committing to blockchain immediately
-      if (commitToBlockchain && questionManager) {
-        try {
-          await submitToBlockchain(questionSet);
-          // Mark as on chain
-          questionSet.onChain = true;
-        } catch (error) {
-          console.error("Error committing to blockchain:", error);
-          setError(error.message);
-          // Still save locally but mark as not on chain
-          questionSet.onChain = false;
-        }
-      } else {
-        // Not committing to blockchain now, mark as not on chain
-        questionSet.onChain = false;
-      }
+      // Calculate content hash from the full question set data
+      const contentString = JSON.stringify(questionSetData);
+      console.log("Content string length:", contentString.length);
       
-      // Save to local storage in either case
-      const existingSets = JSON.parse(localStorage.getItem('questionSets') || '[]');
-      localStorage.setItem('questionSets', JSON.stringify([...existingSets, questionSet]));
+      // Create keccak256 hash of the content
+      const contentHash = ethers.utils.keccak256(
+        ethers.utils.toUtf8Bytes(contentString)
+      );
+      console.log("Content hash:", contentHash);
       
-      // Show success message
-      setSuccess(true);
+      // Store the question set data (in a real implementation, this would go to IPFS)
+      // For now, we just store in localStorage
+      localStorage.setItem(`questionset_${questionSetData.id}`, contentString);
+      
+      // Create question set object for the contract
+      const questionSet = {
+        id: name,
+        questionCount: finalQuestions.length,
+        contentHash,
+        timestamp: Date.now(),
+        questionType: questionType,
+        sourceDocumentPreview: '',
+        questions: finalQuestions
+      };
+      
+      console.log("Final question set:", questionSet);
+      
+      // Store locally for later submission
+      const localQuestionSets = JSON.parse(localStorage.getItem('questionSets') || '[]');
+      localQuestionSets.push(questionSet);
+      localStorage.setItem('questionSets', JSON.stringify(localQuestionSets));
       
       // Reset form
       setName('');
-      setSourceDocument('');
-      setFileUploadName('');
-      setFilePreview('');
       setNumberOfQuestions(5);
       setQuestions([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setSourceDocument('');
+      setSourceDocumentName('');
+      setSuccess(true);
       
-      // Notify parent component
+      // Callback to parent if provided
       if (onQuestionSetCreated) {
-        onQuestionSetCreated();
+        onQuestionSetCreated(questionSet);
       }
-      
-      // Hide success message after 3 seconds
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
     } catch (error) {
-      console.error('Error creating question set:', error);
-      setError(`Failed to create question set: ${error.message}`);
+      console.error("Error creating question set:", error);
+      setError(error.message);
     } finally {
       setLoading(false);
-      setAiStatus('');
     }
   };
-
-  const handleAddQuestion = () => {
-    const newQuestion = {
-      id: `q${questions.length + 1}`,
-      questionText: '',
-      answerHash: '',
-      explanation: ''
-    };
-    
-    setQuestions([...questions, newQuestion]);
-  };
-
-  const handleQuestionChange = (index, field, value) => {
-    const updatedQuestions = [...questions];
-    
-    if (field === 'answer') {
-      // Convert answer to hash
-      updatedQuestions[index].answerHash = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes(value)
-      );
-    } else {
-      updatedQuestions[index][field] = value;
-    }
-    
-    setQuestions(updatedQuestions);
-  };
-
-  const handleRemoveQuestion = (index) => {
-    const updatedQuestions = [...questions];
-    updatedQuestions.splice(index, 1);
-    setQuestions(updatedQuestions);
-  };
-
+  
   const handlePreview = async () => {
-    if (useAI && sourceDocument.trim()) {
-      try {
-        const previewQuestions = await generateQuestionsWithAI(sourceDocument, numberOfQuestions);
-        setQuestions(previewQuestions);
-        setShowPreview(true);
-      } catch (error) {
-        setError(`Failed to generate preview: ${error.message}`);
-      }
-    } else if (!useAI && questions.length > 0) {
+    try {
+      const previewQuestions = await generateQuestionsWithAI(numberOfQuestions);
+      setQuestions(previewQuestions);
       setShowPreview(true);
-    } else {
-      setError('Please add questions or provide a source document for AI generation');
+    } catch (error) {
+      setError(`Failed to generate preview: ${error.message}`);
     }
   };
 
   return (
     <Card className="mb-4">
-      <Card.Header as="h5">Create New Question Set</Card.Header>
-      <Card.Body>
+      <Card.Body className="p-4">
         {error && (
           <Alert variant="danger" dismissible onClose={() => setError(null)}>
             {error}
@@ -539,256 +353,93 @@ Explanation: [explanation]`
           </Alert>
         )}
         
-        <Form onSubmit={handleSubmit}>
-          <Form.Group className="mb-3">
-            <Form.Label>Question Set Name</Form.Label>
-            <Form.Control
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter a unique name for this question set"
-              disabled={loading}
-              required
-            />
-          </Form.Group>
-          
-          <Form.Group className="mb-3">
-            <Form.Label>AI Configuration</Form.Label>
-            <div className="d-flex align-items-center mb-2">
-              <Form.Check
-                type="switch"
-                id="useAI"
-                label="Use AI to generate questions"
-                checked={useAI}
-                onChange={(e) => setUseAI(e.target.checked)}
-                disabled={loading}
-                className="me-3"
-              />
-              {useAI && (
-                <Badge bg="info">Using GPT-4o-mini for question generation</Badge>
+        <Form onSubmit={handleSubmit} className="compact-form">
+          <div className="mb-3">
+            <div className="d-flex justify-content-between align-items-center gap-3 mb-3">
+              <Form.Group className="flex-grow-1 mb-0">
+                <Form.Label>Question Set Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter a unique name for this question set"
+                  disabled={loading}
+                  required
+                />
+              </Form.Group>
+              
+              <Form.Group className="mb-0">
+                <Form.Label>Questions to Generate:</Form.Label>
+                <Form.Control
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={numberOfQuestions}
+                  onChange={(e) => setNumberOfQuestions(parseInt(e.target.value))}
+                  disabled={loading}
+                  style={{ width: '80px' }}
+                />
+              </Form.Group>
+            </div>
+            
+            <div 
+              {...getRootProps()} 
+              className={`dropzone p-3 border rounded ${isDragActive ? 'bg-light border-primary' : ''}`}
+              style={{ 
+                cursor: 'pointer', 
+                minHeight: '100px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <input {...getInputProps()} />
+              {sourceDocumentName ? (
+                <>
+                  <div className="text-center mb-2">
+                    <strong>File uploaded:</strong> {sourceDocumentName}
+                  </div>
+                  <Button 
+                    variant="outline-secondary" 
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSourceDocument('');
+                      setSourceDocumentName('');
+                    }}
+                  >
+                    Remove File
+                  </Button>
+                </>
+              ) : isDragActive ? (
+                <p className="mb-0 text-center">Drop the file here...</p>
+              ) : (
+                <div className="text-center">
+                  <p className="mb-2">Upload a file to generate questions from</p>
+                  <small className="text-muted">Supported: .txt, .md, .markdown, .doc, .docx, .pdf</small>
+                </div>
               )}
             </div>
-          </Form.Group>
+            <Form.Text className="text-muted">
+              If no document is provided, generic blockchain questions will be generated.
+            </Form.Text>
+          </div>
           
-          {useAI ? (
-            <>
-              {/* AI Question Generation Options */}
-              <div className="mb-3 p-3 border rounded bg-light">
-                <h6>AI Generation Settings</h6>
-                <div className="row">
-                  <div className="col-md-6">
-                    <Form.Group className="mb-3">
-                      <Form.Label>Question Format</Form.Label>
-                      <p className="mb-0 text-muted">
-                        <Badge bg="primary" className="me-2">Free-form</Badge>
-                        Questions will be generated in free-form text format
-                      </p>
-                    </Form.Group>
-                  </div>
-                  <div className="col-md-6">
-                    <Form.Group className="mb-3">
-                      <Form.Label>AI Model</Form.Label>
-                      <p className="mb-0 text-muted">
-                        <Badge bg="info" className="me-2">GPT-4o-mini</Badge>
-                        OpenAI's lightweight yet powerful model
-                      </p>
-                    </Form.Group>
-                  </div>
-                </div>
-                <Form.Group className="mb-3">
-                  <Form.Label>Number of Questions</Form.Label>
-                  <Form.Control
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={numberOfQuestions}
-                    onChange={(e) => setNumberOfQuestions(parseInt(e.target.value))}
-                    disabled={loading}
-                  />
-                </Form.Group>
+          {loading && (
+            <div className="mt-3 mb-3">
+              <ProgressBar 
+                now={aiGenerationProgress} 
+                label={`${Math.round(aiGenerationProgress)}%`} 
+                variant="info" 
+              />
+              <div className="text-center text-muted mt-1">
+                <small>{aiStatus}</small>
               </div>
-
-              {/* Document Input Section */}
-              <div className="mb-3">
-                <h6>Source Document</h6>
-                
-                <Tabs
-                  activeKey={activeTab}
-                  onSelect={(k) => setActiveTab(k)}
-                  className="mb-3"
-                >
-                  <Tab eventKey="upload" title="Upload File">
-                    <div className="p-3 border rounded">
-                      <Form.Label>
-                        Upload Document 
-                        <Badge bg="info" className="ms-2">Supports .txt, .md, .pdf, .docx</Badge>
-                      </Form.Label>
-                      <InputGroup className="mb-3">
-                        <Form.Control
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".txt,.md,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={handleFileUpload}
-                          disabled={loading}
-                        />
-                        {fileUploadName && (
-                          <Button 
-                            variant="outline-secondary"
-                            onClick={handleClearFile}
-                            disabled={loading}
-                          >
-                            Clear
-                          </Button>
-                        )}
-                      </InputGroup>
-                      
-                      {fileUploadName && (
-                        <Alert variant="success" className="d-flex align-items-center">
-                          <div>
-                            <strong>File loaded:</strong> {fileUploadName}
-                            {filePreview && (
-                              <div className="mt-2">
-                                <strong>Preview:</strong>
-                                <div className="p-2 bg-light mt-1 border rounded">
-                                  <small>{filePreview}</small>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </Alert>
-                      )}
-                    </div>
-                  </Tab>
-                  
-                  <Tab eventKey="paste" title="Paste Text">
-                    <Form.Control
-                      as="textarea"
-                      rows={8}
-                      value={sourceDocument}
-                      onChange={(e) => setSourceDocument(e.target.value)}
-                      placeholder="Paste the source document text here..."
-                      disabled={loading}
-                      required={useAI && activeTab === 'paste'}
-                      className="mb-2"
-                    />
-                    <Form.Text className="text-muted">
-                      The AI will generate questions based on this document content.
-                    </Form.Text>
-                  </Tab>
-                </Tabs>
-              </div>
-              
-              {loading && (
-                <div className="mb-3 p-3 border rounded">
-                  <div className="d-flex justify-content-between mb-2">
-                    <Form.Label className="mb-0">Processing...</Form.Label>
-                    <span>{Math.round(aiGenerationProgress)}%</span>
-                  </div>
-                  <ProgressBar 
-                    now={aiGenerationProgress} 
-                    animated 
-                    className="mb-2"
-                  />
-                  {aiStatus && (
-                    <div className="text-center text-muted">
-                      <small>{aiStatus}</small>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="mb-3">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <Form.Label>Manual Questions</Form.Label>
-                <Button 
-                  variant="outline-primary" 
-                  size="sm" 
-                  onClick={handleAddQuestion}
-                  disabled={loading}
-                >
-                  Add Question
-                </Button>
-              </div>
-              
-              {questions.length === 0 ? (
-                <Alert variant="info">
-                  No questions added yet. Click "Add Question" to create one.
-                </Alert>
-              ) : (
-                questions.map((question, index) => (
-                  <Card key={question.id} className="mb-3">
-                    <Card.Header className="d-flex justify-content-between align-items-center">
-                      <span>Question {index + 1}</span>
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm" 
-                        onClick={() => handleRemoveQuestion(index)}
-                        disabled={loading}
-                      >
-                        Remove
-                      </Button>
-                    </Card.Header>
-                    <Card.Body>
-                      <Form.Group className="mb-3">
-                        <Form.Label>Question Text</Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={2}
-                          value={question.questionText}
-                          onChange={(e) => handleQuestionChange(index, 'questionText', e.target.value)}
-                          disabled={loading}
-                          required
-                        />
-                      </Form.Group>
-                      
-                      <Form.Group className="mb-3">
-                        <Form.Label>Expected Answer</Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={2}
-                          placeholder="Enter the expected answer"
-                          onChange={(e) => handleQuestionChange(index, 'answer', e.target.value)}
-                          disabled={loading}
-                          required
-                        />
-                        <Form.Text className="text-muted">
-                          The answer will be hashed and stored on the blockchain.
-                        </Form.Text>
-                      </Form.Group>
-                      
-                      <Form.Group className="mb-0">
-                        <Form.Label>Explanation (Optional)</Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={2}
-                          value={question.explanation}
-                          onChange={(e) => handleQuestionChange(index, 'explanation', e.target.value)}
-                          placeholder="Explanation for the correct answer"
-                          disabled={loading}
-                        />
-                      </Form.Group>
-                    </Card.Body>
-                  </Card>
-                ))
-              )}
             </div>
           )}
           
-          <Form.Group className="mb-3">
-            <Form.Check
-              type="checkbox"
-              label="Commit to blockchain immediately"
-              checked={commitToBlockchain}
-              onChange={(e) => setCommitToBlockchain(e.target.checked)}
-              disabled={loading || !questionManager}
-            />
-            <Form.Text className="text-muted">
-              If unchecked, question set will be saved locally until committed.
-            </Form.Text>
-          </Form.Group>
-          
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 mt-3">
             <Button 
               variant="primary" 
               type="submit" 
@@ -808,19 +459,17 @@ Explanation: [explanation]`
                   Processing...
                 </>
               ) : (
-                'Create Question Set'
+                'Generate Question Set'
               )}
             </Button>
             
-            {useAI && (
-              <Button 
-                variant="outline-primary" 
-                onClick={handlePreview}
-                disabled={loading || !sourceDocument.trim()}
-              >
-                Preview Generated Questions
-              </Button>
-            )}
+            <Button
+              variant="outline-secondary"
+              onClick={handlePreview}
+              disabled={loading}
+            >
+              Preview Questions
+            </Button>
           </div>
         </Form>
       </Card.Body>
@@ -858,27 +507,18 @@ Explanation: [explanation]`
           <Button variant="secondary" onClick={() => setShowPreview(false)}>
             Close
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={() => {
-              setShowPreview(false);
-              // Use these questions for the form submission
-            }}
-          >
-            Use These Questions
-          </Button>
         </Modal.Footer>
       </Modal>
       
-      {/* Debug Panel (only visible in development) */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Debug Panel (only visible when debugging is enabled) */}
+      {APP_SETTINGS.debug && (
         <Card.Footer className="bg-light">
           <details>
             <summary className="text-muted small">Debugging Tools</summary>
             <div className="mt-3">
               <h6 className="text-muted">Submission Test</h6>
               <p className="small text-muted">Try submitting a minimal test question set with the simplest possible data to diagnose permission/contract issues.</p>
-              <div className="d-flex flex-wrap gap-2">
+              <div className="d-flex gap-2 mb-3">
                 <Button 
                   size="sm"
                   variant="primary"
@@ -911,7 +551,6 @@ Explanation: [explanation]`
                         contentHash,
                         timestamp: Date.now(),
                         questionType: 'debug',
-                        sourceDocumentPreview: "Test document",
                         questions: testData
                       };
                       
@@ -1028,39 +667,35 @@ Explanation: [explanation]`
                         rawTx.gasLimit = ethers.utils.hexlify(3000000); // Very high gas limit
                         delete rawTx.gasPrice; // Let MetaMask handle gas price
                         
-                        console.log("Raw transaction data:", rawTx);
+                        // Get accounts again to be sure we have the latest state
+                        const currentAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+                        if (!currentAccounts || currentAccounts.length === 0) {
+                          throw new Error("No accounts connected to MetaMask");
+                        }
                         
-                        // Send raw transaction
-                        const provider = new ethers.providers.Web3Provider(window.ethereum);
-                        const walletSigner = provider.getSigner();
-                        const txResponse = await walletSigner.sendTransaction(rawTx);
+                        alert("Sending transaction with the following data:\n" + JSON.stringify(rawTx, null, 2));
                         
-                        alert(`✅ Raw transaction sent!\nTx Hash: ${txResponse.hash}`);
+                        // Send transaction via MetaMask
+                        const txHash = await window.ethereum.request({
+                          method: 'eth_sendTransaction',
+                          params: [{
+                            ...rawTx,
+                            from: currentAccounts[0],
+                          }]
+                        });
                         
-                        const txReceipt = await txResponse.wait();
-                        alert(`✅ Transaction confirmed!\nBlock: ${txReceipt.blockNumber}`);
+                        alert(`✅ Transaction submitted with hash: ${txHash}`);
                       } catch (txError) {
-                        console.error("Transaction test failed:", txError);
-                        
-                        // Enhanced error logging
-                        let errorInfo = "Error details:\n";
-                        if (txError.code) errorInfo += `Code: ${txError.code}\n`;
-                        if (txError.reason) errorInfo += `Reason: ${txError.reason}\n`;
-                        if (txError.method) errorInfo += `Method: ${txError.method}\n`;
-                        if (txError.transaction) errorInfo += `Tx Data: ${JSON.stringify(txError.transaction)}\n`;
-                        if (txError.data) errorInfo += `Data: ${JSON.stringify(txError.data)}\n`;
-                        
-                        console.error(errorInfo);
-                        
-                        alert(`❌ Test transaction failed!\n\nError: ${txError.message}`);
+                        console.error("Transaction error:", txError);
+                        alert(`❌ Transaction failed: ${txError.message}`);
                       }
                     } catch (error) {
-                      console.error("Error in advanced test:", error);
-                      alert(`Advanced test error: ${error.message}`);
+                      console.error("Circuit breaker diagnostic error:", error);
+                      alert(`Circuit breaker diagnostic error: ${error.message}`);
                     }
                   }}
                 >
-                  Advanced Diagnostic Test
+                  Circuit Breaker Test
                 </Button>
                 
                 <Button 
@@ -1073,18 +708,14 @@ Explanation: [explanation]`
                         return;
                       }
                       
-                      // Check connection details
-                      const provider = questionManager.provider;
-                      const signer = questionManager.signer;
-                      
                       // Check account
-                      const account = await signer.getAddress();
+                      const account = await questionManager.signer.getAddress();
                       
                       // Output connection info
                       let info = "CONNECTION DIAGNOSTICS\n\n";
                       
                       // 1. Check network
-                      const network = await provider.getNetwork();
+                      const network = await questionManager.provider.getNetwork();
                       info += `Network: ${network.name || 'localhost'} (Chain ID: ${network.chainId})\n`;
                       
                       if (network.chainId !== 31337) {
@@ -1100,7 +731,7 @@ Explanation: [explanation]`
                       }
                       
                       // 3. Check ETH balance
-                      const balance = await provider.getBalance(account);
+                      const balance = await questionManager.provider.getBalance(account);
                       info += `ETH Balance: ${ethers.utils.formatEther(balance)} ETH\n`;
                       
                       if (balance.eq(0)) {
@@ -1125,11 +756,11 @@ Explanation: [explanation]`
                       }
                       
                       // 6. Check for transaction count/nonce issues
-                      const transactionCount = await provider.getTransactionCount(account);
+                      const transactionCount = await questionManager.provider.getTransactionCount(account);
                       info += `Transaction count (nonce): ${transactionCount}\n`;
                       
                       // 7. Display block information
-                      const blockNumber = await provider.getBlockNumber();
+                      const blockNumber = await questionManager.provider.getBlockNumber();
                       info += `Current block number: ${blockNumber}\n`;
                       
                       alert(info);
@@ -1179,54 +810,10 @@ Explanation: [explanation]`
                         return;
                       }
                       
-                      // Check MetaMask state
-                      alert("Step 3: Checking MetaMask state...");
+                      // Try a minimal raw transaction to debug MetaMask issues
+                      alert("Step 3: Testing direct raw transaction...");
                       
                       try {
-                        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-                        alert(`Connected to chain ID: ${parseInt(chainId, 16)}`);
-                        
-                        // Check if we have the right account
-                        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                        const account = accounts[0];
-                        alert(`Using account: ${account}`);
-                        
-                        // Try to reset MetaMask transaction state
-                        alert("Attempting to reset MetaMask state...");
-                        await window.ethereum.request({
-                          method: 'wallet_requestPermissions',
-                          params: [{ eth_accounts: {} }]
-                        });
-                        
-                        alert("✅ MetaMask permissions refreshed");
-                      } catch (mmError) {
-                        alert(`❌ MetaMask error: ${mmError.message}`);
-                      }
-                      
-                      // Try a raw direct call to the node
-                      alert("Step 4: Attempting direct node call...");
-                      
-                      try {
-                        // First check if we can make a basic eth_call
-                        const callData = await window.ethereum.request({
-                          method: 'eth_call',
-                          params: [{
-                            to: questionManager.address,
-                            data: '0x8da5cb5b' // owner() function signature
-                          }, 'latest']
-                        });
-                        
-                        alert(`✅ Direct eth_call successful: ${callData}`);
-                      } catch (callError) {
-                        alert(`❌ Direct eth_call failed: ${callError.message}`);
-                      }
-                      
-                      // Final step: try a very simple transaction bypassing ethers
-                      alert("Step 5: Trying minimal direct transaction...");
-                      
-                      try {
-                        // Create simplest possible question set ID
-                        const simpleId = "test123";
                         // Use a static hash that we know is valid
                         const simpleHash = "0x1111111111111111111111111111111111111111111111111111111111111111";
                         // Encode the transaction data manually
@@ -1238,6 +825,9 @@ Explanation: [explanation]`
                         
                         // Encode parameters
                         const abiCoder = new ethers.utils.AbiCoder();
+                        
+                        // Create a simple test ID
+                        const simpleId = "debug_" + Date.now();
                         
                         // Need to encode the dynamic string with its offset and length
                         const encodedParams = abiCoder.encode(

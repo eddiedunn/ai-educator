@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button, Alert } from 'react-bootstrap';
 import { ethers } from 'ethers';
-import UserPanel from '../components/user/UserPanel';
 import AvailableQuestionSets from '../components/user/AvailableQuestionSets';
 
 const UserPage = ({ account, balance, tokenBalance, puzzlePoints, questionManager }) => {
@@ -87,9 +86,6 @@ const UserPage = ({ account, balance, tokenBalance, puzzlePoints, questionManage
 
   return (
     <>
-      <h1 className="my-4 text-center">User Interface</h1>
-      
-      <UserPanel account={account} balance={balance} tokenBalance={tokenBalance} puzzlePoints={puzzlePoints} />
       <AvailableQuestionSets questionManager={questionManager} />
     </>
   );

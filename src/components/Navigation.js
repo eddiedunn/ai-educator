@@ -17,9 +17,7 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
           <Nav className="me-auto">
             {userRole === 'admin' && (
               <>
-                <Nav.Link href="#admin">Dashboard</Nav.Link>
-                <Nav.Link href="#manage-users">Manage Users</Nav.Link>
-                <Nav.Link href="#settings">Settings</Nav.Link>
+                <h2 className="mb-0 nav-link fw-bold">Question Set Management</h2>
               </>
             )}
             

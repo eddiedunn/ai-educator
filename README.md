@@ -62,6 +62,15 @@ This will stop any running processes and start the entire application stack (Har
 - `npm run update-frontend` - Updates frontend code with deployed contract addresses
 - `npm run deploy:full` - Deploys contracts and updates frontend in one command
 - `npm run test:contracts` - Runs tests for the smart contracts
+- `npm run test:contracts:watch` - Runs contract tests in watch mode (reruns on file changes)
+- `npm run test:contracts:coverage` - Generates a code coverage report for contracts
+- `npm run test:contracts:coverage:puzzle` - Generates coverage for PuzzlePoints contract
+- `npm run test:contracts:coverage:question` - Generates coverage for QuestionManager contract
+- `npm run test:contracts:coverage:chainlink` - Generates coverage for ChainlinkAnswerVerifier contract
+- `npm run test:contracts:gas` - Runs contract tests with gas reporting enabled
+- `npm run test:puzzle-points` - Runs tests only for the PuzzlePoints contract
+- `npm run test:question-manager` - Runs tests only for the QuestionManager contract
+- `npm run test:chainlink-verifier` - Runs tests only for the ChainlinkAnswerVerifier contract
 - `npm test` - Runs tests for the React application
 - `npm run eject` - Ejects the Create React App configuration
 
@@ -135,6 +144,55 @@ These are the first two accounts provided by the Hardhat node.
 - `/test` - Smart contract tests
 - `/deployments` - Contract addresses for different networks
 
+## Testing
+
+### Smart Contract Testing
+
+The project includes a comprehensive test suite for smart contracts. You can run these tests using the following commands:
+
+```bash
+# Run all contract tests
+npm run test:contracts
+
+# Run tests for specific contracts
+npm run test:puzzle-points
+npm run test:question-manager
+npm run test:chainlink-verifier
+
+# Run tests in watch mode (rerun on file changes)
+npm run test:contracts:watch
+
+# Run tests with gas reporting
+npm run test:contracts:gas
+```
+
+#### Coverage Testing
+
+The project supports code coverage reporting, but due to the complexity of the contracts, there are some limitations:
+
+```bash
+# Generate a coverage report (may encounter gas limit issues with complex contracts)
+npm run test:contracts:coverage
+
+# Try coverage on specific contracts
+npm run test:contracts:coverage:puzzle
+npm run test:contracts:coverage:question
+npm run test:contracts:coverage:chainlink
+```
+
+> **Note:** Coverage testing may encounter gas limit errors due to the instrumentation of code by the coverage tool. This is a known limitation when working with complex smart contracts.
+
+The test files are located in the `/test` directory and use Hardhat's testing framework with Chai assertions.
+
+### React App Testing
+
+For testing the React frontend:
+
+```bash
+# Run React tests
+npm test
+```
+
 ## For Hackathon Development
 
 ### User/Admin Interface
@@ -152,3 +210,4 @@ For backend services:
 2. For additional backend needs, consider adding Express.js in a `/server` directory
 
 Remember to keep it simple given your 48-hour constraint!
+
