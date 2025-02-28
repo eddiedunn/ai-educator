@@ -33,9 +33,16 @@ yarn.lock
 /typechain
 /typechain-types
 
+# Contract ABIs (compiled contract artifacts)
+/src/abis/
+/src/abi/
+
 # Solidity coverage
 /coverage
 /coverage.json
+
+# Gas reporter
+gas-report.txt
 
 # Deployments
 /deployments
@@ -52,6 +59,14 @@ localhost-accounts.json
 
 # Debug logs
 *.log
+
+# Shell scripts (optional, uncomment if you want to exclude them)
+# *.sh
+
+# Temp files
+*.temp
+*.tmp
+test.txt
 
 # Misc
 .DS_Store

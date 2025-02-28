@@ -3,6 +3,7 @@
 // For now, we'll simulate storage using localStorage
 
 import { ethers } from 'ethers';
+import { debugLog } from './debug';
 
 // Store answers in IPFS and return the content hash
 // In a real implementation, this would upload to IPFS
@@ -31,8 +32,8 @@ export const storeAnswers = async (questionSetId, answers) => {
       ethers.utils.toUtf8Bytes(answersJson)
     );
     
-    console.log(`Stored answers for question set ${questionSetId} with hash: ${answersHash}`);
-    console.log('Answers:', answersObj);
+    debugLog(`Stored answers for question set ${questionSetId} with hash: ${answersHash}`);
+    debugLog('Answers:', answersObj);
     
     return {
       uniqueId,
@@ -83,8 +84,9 @@ export const retrieveQuestionSet = async (questionSetId) => {
     ];
     
     // Create questions based on the question set ID
-    // The number of questions is determined by the last digit of the ID
-    const questionCount = parseInt(questionSetId.slice(-1)) || 5;
+    // Ensure we generate at least 5 questions regardless of the ID
+    const questionCount = Math.max(5, parseInt(questionSetId) % 10 || 5);
+    debugLog(`Generating ${questionCount} questions for question set ${questionSetId}`);
     
     for (let i = 0; i < questionCount; i++) {
       mockQuestions.push({
@@ -109,6 +111,7 @@ export const retrieveQuestionSet = async (questionSetId) => {
       ethers.utils.toUtf8Bytes(JSON.stringify(questionSet))
     );
     
+    debugLog(`Generated question set with ${mockQuestions.length} questions`);
     return {
       questionSet,
       contentHash
@@ -122,14 +125,47 @@ export const retrieveQuestionSet = async (questionSetId) => {
 // Submit answers to the blockchain
 export const submitAnswersToBlockchain = async (questionManager, questionSetId, answers) => {
   try {
-    // First store the answers and get the hash
+    debugLog('Starting answer submission process...');
+    
+    // First check if the user has an active assessment
+    let hasActiveAssessment = false;
+    try {
+      const userAssessment = await questionManager.userAssessments(await questionManager.signer.getAddress());
+      hasActiveAssessment = userAssessment.active;
+      debugLog('Assessment status check:', hasActiveAssessment ? 'Active' : 'Inactive');
+    } catch (error) {
+      debugLog('Error checking assessment status:', error);
+    }
+    
+    // If no active assessment, try to request one
+    if (!hasActiveAssessment) {
+      debugLog('No active assessment found. Starting a new assessment...');
+      try {
+        const tx = await questionManager.startAssessment(questionSetId, {
+          gasLimit: 300000 // Explicit gas limit to bypass estimation issues
+        });
+        await tx.wait();
+        debugLog('Assessment started successfully!');
+      } catch (error) {
+        console.error('Error starting assessment:', error);
+        throw new Error(`Failed to start assessment: ${error.message}`);
+      }
+    }
+    
+    // Store the answers and get the hash
     const { answersHash } = await storeAnswers(questionSetId, answers);
     
     // Now submit the hash to the blockchain
-    const tx = await questionManager.submitAnswers(ethers.utils.arrayify(answersHash));
+    debugLog('Submitting answers hash:', answersHash);
+    debugLog('Using arrayify on hash...');
+    
+    // Add gas limit explicitly to avoid estimation issues
+    const tx = await questionManager.submitAnswers(ethers.utils.arrayify(answersHash), {
+      gasLimit: 300000 // Explicit gas limit to bypass estimation issues
+    });
     await tx.wait();
     
-    console.log('Answers submitted to blockchain:', tx.hash);
+    debugLog('Answers submitted to blockchain:', tx.hash);
     return {
       transactionHash: tx.hash,
       answersHash

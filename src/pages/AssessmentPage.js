@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Button, Form, Alert, Spinner, ProgressBar } from 'react-bootstrap';
+import { retrieveQuestionSet, submitAnswersToBlockchain } from '../utils/answerStorage';
+import { debugLog, isDebugMode } from '../utils/debug';
+import { evaluateWithOpenAI } from '../utils/llmEvaluator';
 
 const AssessmentPage = ({ questionManager }) => {
   const { id } = useParams();
@@ -13,6 +16,8 @@ const AssessmentPage = ({ questionManager }) => {
   const [submitting, setSubmitting] = useState(false);
   const [assessmentComplete, setAssessmentComplete] = useState(false);
   const [questionSetData, setQuestionSetData] = useState(null);
+  const [contentHash, setContentHash] = useState(null);
+  const [startingAssessment, setStartingAssessment] = useState(false);
 
   useEffect(() => {
     if (!questionManager) {
@@ -29,53 +34,48 @@ const AssessmentPage = ({ questionManager }) => {
     try {
       setLoading(true);
       setError(null);
-      console.log(`Loading assessment for question set ID: ${id}`);
+      debugLog(`Loading assessment for question set ID: ${id}`);
 
       // Get question set data from the contract
-      const questionSet = await questionManager.questionSets(id);
-      setQuestionSetData(questionSet);
+      const contractQuestionSet = await questionManager.questionSets(id);
+      setQuestionSetData(contractQuestionSet);
       
-      console.log("Question set data:", questionSet);
+      debugLog("Question set data from contract:", contractQuestionSet);
       
-      if (!questionSet || !questionSet.active) {
+      if (!contractQuestionSet || !contractQuestionSet.active) {
         throw new Error("Question set not found or not active");
       }
 
-      // In a real implementation, you would fetch the questions from IPFS using the contentHash
-      // For now, we'll create sample free-form questions
-      const sampleQuestions = [];
-      for (let i = 0; i < questionSet.questionCount; i++) {
-        sampleQuestions.push({
-          id: i,
-          text: `Question ${i + 1}: Explain the concept of ${getRandomTopic(i)} in your own words.`,
-          type: 'free-text'
-        });
+      // Check if user already has an active assessment
+      try {
+        const userAddress = await questionManager.signer.getAddress();
+        const userAssessment = await questionManager.userAssessments(userAddress);
+        
+        // If the user doesn't have an active assessment, we'll need to request one
+        if (!userAssessment.active) {
+          debugLog("No active assessment found for user. Will request one during submission.");
+        } else {
+          debugLog("User has an active assessment:", userAssessment);
+        }
+      } catch (err) {
+        debugLog("Error checking user assessment:", err);
       }
+
+      // Load question content from storage (IPFS in a real implementation)
+      // For now, this creates mock questions based on the ID
+      const { questionSet, contentHash: qsContentHash } = await retrieveQuestionSet(id);
+      debugLog("Question set content:", questionSet);
+      debugLog("Content hash:", qsContentHash);
+      debugLog(`Loaded ${questionSet.questions.length} questions`);
       
-      setQuestions(sampleQuestions);
+      setQuestions(questionSet.questions);
+      setContentHash(qsContentHash);
       setLoading(false);
     } catch (error) {
       console.error("Error loading assessment:", error);
       setError(`Failed to load assessment: ${error.message}`);
       setLoading(false);
     }
-  };
-
-  // Helper function to generate random topics for sample questions
-  const getRandomTopic = (index) => {
-    const topics = [
-      'blockchain consensus mechanisms',
-      'smart contract security',
-      'decentralized finance (DeFi)',
-      'non-fungible tokens (NFTs)',
-      'layer 2 scaling solutions',
-      'Web3 architecture',
-      'token economics',
-      'decentralized autonomous organizations (DAOs)',
-      'zero-knowledge proofs',
-      'cross-chain interoperability'
-    ];
-    return topics[index % topics.length];
   };
 
   const handleTextAnswerChange = (questionId, text) => {
@@ -112,22 +112,80 @@ const AssessmentPage = ({ questionManager }) => {
         return;
       }
 
-      // Prepare answers for submission
-      const answerArray = questions.map((q) => answers[q.id] || '');
-      console.log("Submitting free-text answers:", answerArray);
+      // Check if user has an active assessment or needs to request one
+      setStartingAssessment(true);
+      
+      try {
+        // Get user assessment status
+        const userAddress = await questionManager.signer.getAddress();
+        const userAssessment = await questionManager.userAssessments(userAddress);
+        
+        if (!userAssessment.active) {
+          debugLog("User has no active assessment. Requesting one...");
+          // Will be handled in submitAnswersToBlockchain
+        }
+      } catch (error) {
+        debugLog("Error checking assessment status:", error);
+      }
+      
+      setStartingAssessment(false);
 
-      // In a real implementation, you would call the contract to submit answers
-      // The answers would be sent to an LLM for evaluation
-      // await questionManager.submitAnswers(id, answerArray);
+      // Format answers into an array for submission
+      const answerArray = questions.map((q) => ({
+        questionId: q.id,
+        answer: answers[q.id] || ''
+      }));
       
-      // Mock submission delay (would be replaced with actual blockchain transaction)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      debugLog("Submitting free-text answers:", answerArray);
+      debugLog(`Total questions: ${questions.length}, answers submitted: ${answerArray.length}`);
+
+      // Submit answers to the blockchain
+      try {
+        await submitAnswersToBlockchain(questionManager, id, answerArray);
+        debugLog("Answers submitted successfully");
+        
+        setAssessmentComplete(true);
+      } catch (error) {
+        console.error("Error submitting to blockchain:", error);
+        
+        // Check if it's the "No active assessment" error
+        if (error.message.includes("No active assessment")) {
+          setError("Failed to start assessment. Please try refreshing the page and starting again.");
+        } else {
+          setError(`Blockchain submission failed: ${error.message}. Please try again.`);
+        }
+      }
       
-      setAssessmentComplete(true);
       setSubmitting(false);
     } catch (error) {
       console.error("Error submitting assessment:", error);
       setError(`Failed to submit assessment: ${error.message}`);
+      setSubmitting(false);
+    }
+  };
+
+  // Add function to test OpenAI evaluation
+  const handleTestEvaluation = async () => {
+    try {
+      if (!isDebugMode()) return;
+      
+      setSubmitting(true);
+      debugLog('Testing OpenAI evaluation...');
+      
+      // Get the current question and answer
+      const currentQ = questions[currentQuestion];
+      const currentA = answers[currentQ.id] || '';
+      
+      // Call the OpenAI evaluator directly
+      const result = await evaluateWithOpenAI(currentQ, currentA);
+      
+      // Show the result in an alert for testing
+      alert(`Evaluation Result:\nScore: ${result.score}\nFeedback: ${result.feedback}`);
+      
+    } catch (error) {
+      console.error('Error testing evaluation:', error);
+      alert(`Error testing evaluation: ${error.message}`);
+    } finally {
       setSubmitting(false);
     }
   };
@@ -150,6 +208,22 @@ const AssessmentPage = ({ questionManager }) => {
       <Alert variant="danger" className="my-4">
         <Alert.Heading>Error</Alert.Heading>
         <p>{error}</p>
+        
+        {isDebugMode() && (
+          <div className="mt-3 border-top pt-2">
+            <h6 className="text-muted">Debug Information:</h6>
+            <ul className="small">
+              <li>Question Set ID: {id}</li>
+              <li>Content Hash: {contentHash ? `${contentHash.substring(0, 10)}...` : 'None'}</li>
+              <li>Questions Loaded: {questions.length}</li>
+              <li>Contract Connected: {questionManager ? 'Yes' : 'No'}</li>
+            </ul>
+            <p className="small text-muted">
+              Debug mode is enabled. Set REACT_APP_ENABLE_DEBUG=false in .env to disable.
+            </p>
+          </div>
+        )}
+        
         <div className="d-flex justify-content-end">
           <Button variant="outline-danger" onClick={handleReturnToMain}>
             Return to Dashboard
@@ -167,6 +241,9 @@ const AssessmentPage = ({ questionManager }) => {
           <Card.Title>Thank you for completing the assessment!</Card.Title>
           <Card.Text>
             Your answers have been submitted successfully. They will be evaluated by an AI system, and results will be processed on the blockchain.
+          </Card.Text>
+          <Card.Text className="text-muted">
+            The evaluation process may take a few minutes. You can check your results on the dashboard once processing is complete.
           </Card.Text>
           <Button variant="primary" onClick={handleReturnToMain}>
             Return to Dashboard
@@ -230,6 +307,17 @@ const AssessmentPage = ({ questionManager }) => {
               >
                 Previous
               </Button>
+              
+              {/* Add test evaluation button when in debug mode */}
+              {isDebugMode() && (
+                <Button
+                  variant="info"
+                  onClick={handleTestEvaluation}
+                  disabled={submitting || !answers[questions[currentQuestion].id]}
+                >
+                  Test Evaluation
+                </Button>
+              )}
               
               {currentQuestion < questions.length - 1 ? (
                 <Button 
