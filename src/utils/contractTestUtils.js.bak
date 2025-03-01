@@ -216,9 +216,9 @@ async function checkVerifierSetup(questionManager, provider) {
       const donId = await verifier.donID();
       const subscriptionId = await verifier.subscriptionId();
       console.log(`DON ID: ${ethers.utils.parseBytes32String(donId)}`);
-      console.log(`Subscription ID: ${subscriptionId ? subscriptionId.toString() : 'undefined'}`);
+      console.log(`Subscription ID: ${subscriptionId.toString()}`);
       
-      if (!subscriptionId || subscriptionId.toString() === '0') {
+      if (subscriptionId.toString() === '0') {
         console.error("❌ ERROR: Subscription ID is not set (value is 0)");
         return {
           configured: false,
@@ -421,9 +421,9 @@ async function submitWithGasEstimate(questionManager, questionSetId, answersHash
     
     // Check if subscription ID is set
     const subscriptionId = await verifier.subscriptionId();
-    console.log(`Subscription ID: ${subscriptionId ? subscriptionId.toString() : 'undefined'}`);
+    console.log(`Subscription ID: ${subscriptionId.toString()}`);
     
-    if (!subscriptionId || subscriptionId.toString() === '0') {
+    if (subscriptionId.toString() === '0') {
       console.error("❌ ERROR: Subscription ID is not set (value is 0)");
       return {
         success: false,
@@ -455,7 +455,7 @@ async function submitWithGasEstimate(questionManager, questionSetId, answersHash
     }
     
     // Now, try to estimate gas for the submit assessment function
-    console.log("Attempting to estimate gas for submitAssessmentAnswers...");
+    console.log("Attempting to estimate gas for submitAssessment...");
     try {
       // Get question set content hash
       const questionSetData = await questionManager.questionSets(questionSetId);
@@ -463,32 +463,26 @@ async function submitWithGasEstimate(questionManager, questionSetId, answersHash
       console.log(`Question set content hash: ${questionSetContentHash}`);
       
       // Check if the assessment exists and if it's already being verified
-      const assessment = await questionManager.getUserAssessment(await questionManager.signer.getAddress());
+      const assessment = await questionManager.userAssessments(signer.address);
+      console.log("Assessment status:", {
+        user: assessment.user,
+        score: assessment.score.toString(),
+        status: assessment.status.toString(),
+        timestamp: assessment.timestamp.toString()
+      });
       
-      // Add null checks for the assessment object and its properties
-      if (assessment) {
-        console.log("Assessment status:", {
-          user: assessment.user || 'undefined',
-          score: assessment.score ? assessment.score.toString() : 'undefined',
-          status: assessment.status ? assessment.status.toString() : 'undefined',
-          timestamp: assessment.timestamp ? assessment.timestamp.toString() : 'undefined'
-        });
-        
-        // If the assessment is already being verified, we can't submit again
-        if (assessment.status && assessment.status.toString() === '1') { // 1 = Verifying
-          console.error("❌ ERROR: Assessment is already in 'Verifying' state");
-          return {
-            success: false,
-            error: "Assessment already being verified",
-            details: "The assessment is already in the 'Verifying' state. Wait for the verification to complete or restart the assessment."
-          };
-        }
-      } else {
-        console.log("No existing assessment found for this user.");
+      // If the assessment is already being verified, we can't submit again
+      if (assessment.status.toString() === '1') { // 1 = Verifying
+        console.error("❌ ERROR: Assessment is already in 'Verifying' state");
+        return {
+          success: false,
+          error: "Assessment already being verified",
+          details: "The assessment is already in the 'Verifying' state. Wait for the verification to complete or restart the assessment."
+        };
       }
       
       // Estimate gas
-      const gasEstimate = await questionManager.estimateGas.submitAssessmentAnswers(
+      const gasEstimate = await questionManager.estimateGas.submitAssessment(
         questionSetId, 
         answersHash
       );
@@ -808,83 +802,4 @@ async function testChainlinkSetup(signer, contractAddresses) {
     const verifierAddress = contractAddresses.chainlinkVerifier;
     
     console.log(`📋 Contract Addresses:`);
-    console.log(`  - QuestionManager: ${questionManagerAddress}
-  - ChainlinkAnswerVerifier: ${verifierAddress}`);
-    
-    // Connect to contracts using regular ethers (not hardhat ethers)
-    const questionManager = new ethers.Contract(
-      questionManagerAddress,
-      QuestionManagerArtifact.abi,
-      signer
-    );
-    
-    const verifier = new ethers.Contract(
-      verifierAddress,
-      ChainlinkAnswerVerifierArtifact.abi,
-      signer
-    );
-    
-    // Test connection between contracts
-    console.log("🔄 Testing connection between QuestionManager and ChainlinkAnswerVerifier...");
-    const registeredVerifier = await questionManager.answerVerifier();
-    
-    results.tests.verifierRegistered = registeredVerifier.toLowerCase() === verifierAddress.toLowerCase();
-    console.log(`✅ Verifier registration: ${results.tests.verifierRegistered ? "PASSED" : "FAILED"}`);
-    
-    if (!results.tests.verifierRegistered) {
-      results.errors.push("QuestionManager does not have the correct ChainlinkAnswerVerifier registered");
-    }
-    
-    // Test Chainlink Functions subscription
-    console.log("🔗 Testing Chainlink Functions subscription...");
-    try {
-      const donId = await verifier.donID();
-      const subscriptionId = await verifier.subscriptionId();
-      
-      results.tests.donIdSet = donId && donId !== "0x0000000000000000000000000000000000000000000000000000000000000000";
-      results.tests.subscriptionIdSet = subscriptionId && subscriptionId.toString() !== "0";
-      
-      console.log(`✅ DON ID configured: ${results.tests.donIdSet ? "PASSED" : "FAILED"}`);
-      console.log(`✅ Subscription ID configured: ${results.tests.subscriptionIdSet ? "PASSED" : "FAILED"}`);
-      
-      if (!results.tests.donIdSet) {
-        results.errors.push("ChainlinkAnswerVerifier does not have a DON ID configured");
-      }
-      
-      if (!results.tests.subscriptionIdSet) {
-        results.errors.push("ChainlinkAnswerVerifier does not have a Subscription ID configured");
-      }
-    } catch (error) {
-      console.error("❌ Error checking Chainlink configuration:", error.message);
-      results.errors.push(`Error checking configuration: ${error.message}`);
-      results.tests.donIdSet = false;
-      results.tests.subscriptionIdSet = false;
-    }
-    
-    // Overall test result
-    results.success = results.tests.verifierRegistered && 
-                      results.tests.donIdSet && 
-                      results.tests.subscriptionIdSet;
-    console.log(`\n🏁 Overall Chainlink setup test: ${results.success ? "PASSED" : "FAILED"}`);
-    
-    return results;
-  } catch (error) {
-    console.error("❌ Error testing Chainlink setup:", error);
-    results.errors.push(error.message);
-    return results;
-  }
-}
-
-module.exports = {
-  checkQuestionSet,
-  checkPreviousAssessment,
-  checkVerifierSetup,
-  disableChainlinkTemporarily,
-  enableChainlink,
-  restartAssessment,
-  submitWithGasEstimate,
-  submitWithChainlinkBypass,
-  runCompleteDiagnostics,
-  quickPreSubmissionCheck,
-  testChainlinkSetup
-};
+    console.log(`

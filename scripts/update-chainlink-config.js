@@ -1,9 +1,37 @@
 // Script to update ChainlinkAnswerVerifier with source code, DON ID, and subscription ID
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
+// Read address from addresses.json
+function getContractAddress() {
+  try {
+    const addressesPath = path.join(__dirname, '..', 'deployments', 'addresses.json');
+    const addressesJSON = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
+    
+    const networkName = network.name;
+    console.log(`Network: ${networkName}`);
+    
+    if (addressesJSON[networkName]) {
+      const verifierAddress = addressesJSON[networkName].ChainlinkAnswerVerifier;
+      if (verifierAddress) {
+        console.log(`✅ Found contract address in deployments/addresses.json`);
+        return verifierAddress;
+      }
+    }
+    
+    // Fallback to environment variable or hardcoded address
+    console.log(`⚠️ Contract address not found in addresses.json for network ${networkName}`);
+    return process.env.CHAINLINK_VERIFIER_ADDRESS || "0x094112Bf48270b426c9bE043ee002CbBF6AB813D";
+  } catch (error) {
+    console.log(`⚠️ Error reading addresses.json: ${error.message}`);
+    return process.env.CHAINLINK_VERIFIER_ADDRESS || "0x094112Bf48270b426c9bE043ee002CbBF6AB813D";
+  }
+}
+
 // Contract address
-const CHAINLINK_VERIFIER_ADDRESS = "0x094112Bf48270b426c9bE043ee002CbBF6AB813D";
+const CHAINLINK_VERIFIER_ADDRESS = getContractAddress();
 
 // Get these values from command line or .env
 const DON_ID = process.env.CHAINLINK_DON_ID || "fun-base-sepolia";

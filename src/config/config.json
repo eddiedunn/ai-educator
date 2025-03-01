@@ -1,0 +1,86 @@
+{
+  "development": {
+    "blockchain": {
+      "chainId": "84532",
+      "rpcUrl": "https://sepolia.base.org",
+      "networkName": "Base Sepolia Testnet",
+      "blockExplorer": "https://sepolia.basescan.org"
+    },
+    "contracts": {
+      "puzzlePoints": "0x5FbDB2315678afecb367f032d93F642f64180aa3 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 0x26eB62bB2a5eBd450B3EFB712D9339C89c755d22 0x1fEd1E92548bAB1cf9b2ffbEeB77DDA8BDB72187",
+      "questionManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 0x79d4C3c94A3837E75b6abaB3992Ee3Adc8976ea5",
+      "chainlinkAnswerVerifier": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 0x1fEd1E92548bAB1cf9b2ffbEeB77DDA8BDB72187 0x79d4C3c94A3837E75b6abaB3992Ee3Adc8976ea5"
+    },
+    "apis": {
+      "openai": {
+        "model": "gpt-4o-mini",
+        "endpointUrl": "/api/openai-proxy"
+      }
+    },
+    "ipfs": {
+      "enabled": false,
+      "gateway": "https://ipfs.io/ipfs/",
+      "node": {
+        "host": "ipfs.infura.io",
+        "port": 5001,
+        "protocol": "https"
+      }
+    }
+  },
+  "production": {
+    "blockchain": {
+      "chainId": "84532",
+      "rpcUrl": "https://sepolia.base.org",
+      "networkName": "Base Sepolia Testnet",
+      "blockExplorer": "https://sepolia.basescan.org"
+    },
+    "contracts": {
+      "puzzlePoints": "0x5FbDB2315678afecb367f032d93F642f64180aa3 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 0x26eB62bB2a5eBd450B3EFB712D9339C89c755d22 0x1fEd1E92548bAB1cf9b2ffbEeB77DDA8BDB72187",
+      "questionManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 0x79d4C3c94A3837E75b6abaB3992Ee3Adc8976ea5",
+      "chainlinkAnswerVerifier": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 0x1fEd1E92548bAB1cf9b2ffbEeB77DDA8BDB72187 0x79d4C3c94A3837E75b6abaB3992Ee3Adc8976ea5"
+    },
+    "apis": {
+      "openai": {
+        "model": "gpt-4o-mini",
+        "endpointUrl": "/api/openai-proxy"
+      }
+    },
+    "ipfs": {
+      "enabled": false,
+      "gateway": "https://ipfs.io/ipfs/",
+      "node": {
+        "host": "ipfs.infura.io",
+        "port": 5001,
+        "protocol": "https"
+      }
+    }
+  },
+  "test": {
+    "blockchain": {
+      "chainId": "31337",
+      "rpcUrl": "http://127.0.0.1:8545",
+      "networkName": "Hardhat Local",
+      "blockExplorer": ""
+    },
+    "contracts": {
+      "puzzlePoints": "",
+      "questionManager": "",
+      "chainlinkAnswerVerifier": ""
+    },
+    "apis": {
+      "openai": {
+        "model": "gpt-3.5-turbo",
+        "endpointUrl": "/api/openai-proxy"
+      }
+    },
+    "ipfs": {
+      "enabled": false,
+      "gateway": "https://ipfs.io/ipfs/",
+      "node": {
+        "host": "localhost",
+        "port": 5001,
+        "protocol": "http"
+      }
+    }
+  }
+}

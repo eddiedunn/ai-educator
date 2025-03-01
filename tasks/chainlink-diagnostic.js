@@ -1,6 +1,8 @@
 const { task, types } = require("hardhat/config");
 const { testChainlinkSetup } = require("../src/utils/contractTestUtils");
 const ethers = require("ethers");
+const fs = require("fs");
+const path = require("path");
 
 task("chainlink:diagnose", "Run comprehensive diagnostic tests for Chainlink setup")
   .addParam("quickonly", "Only run quick checks without gas estimation", false, types.boolean)
@@ -19,16 +21,44 @@ task("chainlink:diagnose", "Run comprehensive diagnostic tests for Chainlink set
       const [signer] = await hre.ethers.getSigners();
       console.log(`Using signer address: ${signer.address}`);
       
-      // Get deployed contracts
-      const QuestionManager = await hre.ethers.getContractFactory("QuestionManager");
-      const ChainlinkAnswerVerifier = await hre.ethers.getContractFactory("ChainlinkAnswerVerifier");
+      // Get deployed contract addresses from addresses.json instead of deployments
+      let questionManagerAddress;
+      let verifierAddress;
       
-      // Load deployed contract addresses
-      const questionManagerAddress = (await hre.deployments.get("QuestionManager")).address;
-      const verifierAddress = (await hre.deployments.get("ChainlinkAnswerVerifier")).address;
+      try {
+        // Read addresses from the JSON file
+        const addressesPath = path.join(__dirname, '..', 'deployments', 'addresses.json');
+        const addressesJSON = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
+        
+        // Get addresses for the current network
+        if (!addressesJSON[network]) {
+          throw new Error(`No deployment found for network: ${network}`);
+        }
+        
+        questionManagerAddress = addressesJSON[network].QuestionManager;
+        verifierAddress = addressesJSON[network].ChainlinkAnswerVerifier;
+        
+        if (!questionManagerAddress || !verifierAddress) {
+          throw new Error(`Missing contract addresses for network: ${network}`);
+        }
+      } catch (error) {
+        console.error(`Error loading addresses: ${error.message}`);
+        
+        // Try to get from environment as fallback
+        questionManagerAddress = process.env.QUESTION_MANAGER_ADDRESS;
+        verifierAddress = process.env.CHAINLINK_VERIFIER_ADDRESS;
+        
+        if (!questionManagerAddress || !verifierAddress) {
+          throw new Error(`Failed to load contract addresses. Please ensure deployments/addresses.json exists with entries for ${network} or set QUESTION_MANAGER_ADDRESS and CHAINLINK_VERIFIER_ADDRESS environment variables.`);
+        }
+      }
       
       console.log(`QuestionManager deployed at: ${questionManagerAddress}`);
       console.log(`ChainlinkAnswerVerifier deployed at: ${verifierAddress}`);
+      
+      // Get contracts
+      const QuestionManager = await hre.ethers.getContractFactory("QuestionManager");
+      const ChainlinkAnswerVerifier = await hre.ethers.getContractFactory("ChainlinkAnswerVerifier");
       
       // Create contract instances
       const questionManager = await QuestionManager.attach(questionManagerAddress);
@@ -49,7 +79,7 @@ task("chainlink:diagnose", "Run comprehensive diagnostic tests for Chainlink set
         
         try {
           // Get a test question set ID
-          const filter = questionManager.filters.QuestionSetCreated();
+          const filter = questionManager.filters.QuestionSetSubmitted();
           const events = await questionManager.queryFilter(filter);
           
           if (events.length === 0) {

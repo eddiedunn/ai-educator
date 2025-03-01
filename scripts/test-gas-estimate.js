@@ -1,6 +1,8 @@
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 const { submitWithGasEstimate } = require("../src/utils/contractTestUtils");
 const colors = require("colors");
+const fs = require("fs");
+const path = require("path");
 
 async function main() {
   console.log(colors.cyan("\n⛽ TESTING GAS ESTIMATION FOR CHAINLINK FUNCTIONS\n"));
@@ -10,12 +12,40 @@ async function main() {
     const [signer] = await ethers.getSigners();
     console.log(`Using address: ${colors.green(signer.address)}`);
     
-    // Get deployed contract addresses from environment variables
-    const questionManagerAddress = process.env.QUESTION_MANAGER_ADDRESS;
+    // Try to get addresses from addresses.json first
+    let questionManagerAddress;
     
+    try {
+      // Read addresses from the JSON file
+      const addressesPath = path.join(__dirname, '..', 'deployments', 'addresses.json');
+      const addressesJSON = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
+      
+      // Get addresses for the current network
+      const networkName = network.name;
+      console.log(`Network: ${colors.blue(networkName)}`);
+      
+      if (addressesJSON[networkName]) {
+        questionManagerAddress = addressesJSON[networkName].QuestionManager;
+        console.log(colors.green("✅ Found contract address in deployments/addresses.json"));
+      } else {
+        console.log(colors.yellow(`⚠️ No deployment found for network: ${networkName} in addresses.json`));
+      }
+    } catch (error) {
+      console.log(colors.yellow(`⚠️ Error reading addresses.json: ${error.message}`));
+    }
+    
+    // Fall back to environment variables if needed
     if (!questionManagerAddress) {
-      console.log(colors.red("❌ ERROR: QUESTION_MANAGER_ADDRESS not set in environment"));
-      return;
+      questionManagerAddress = process.env.QUESTION_MANAGER_ADDRESS;
+      if (questionManagerAddress) {
+        console.log(colors.green("✅ Using QUESTION_MANAGER_ADDRESS from environment"));
+      } else {
+        console.log(colors.red("❌ ERROR: Could not find QuestionManager address"));
+        console.log(colors.yellow("Please either:"));
+        console.log(colors.yellow("1. Deploy contracts with 'npm run deploy:baseSepolia' or"));
+        console.log(colors.yellow("2. Set QUESTION_MANAGER_ADDRESS in your .env file"));
+        return;
+      }
     }
     
     console.log(`QuestionManager: ${colors.green(questionManagerAddress)}`);
@@ -33,18 +63,21 @@ async function main() {
       timestamp: new Date().toISOString()
     });
     
+    // Hash the answers string to create a bytes32 hash
+    const testAnswerHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(testAnswer));
+    
     console.log(colors.cyan("\n📝 Using test data:"));
     console.log(`Question Set ID: ${colors.yellow(testQuestionSetId)}`);
     console.log(`Answer: ${colors.yellow(testAnswer.substring(0, 40) + "...")}`);
+    console.log(`Answer Hash: ${colors.yellow(testAnswerHash)}`);
     
     // Run the gas estimation test
     console.log(colors.cyan("\n🔍 Running gas estimation test...\n"));
     
     const result = await submitWithGasEstimate(
       questionManager,
-      signer,
       testQuestionSetId,
-      testAnswer
+      testAnswerHash
     );
     
     // Display results

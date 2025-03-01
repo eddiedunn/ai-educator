@@ -10,6 +10,17 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Initialize variables
+AUTO_YES=false
+
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+  case $1 in
+    -y|--yes) AUTO_YES=true; shift ;;
+    *) echo "Unknown parameter: $1"; exit 1 ;;
+  esac
+done
+
 # Check for required commands
 check_requirements() {
   section "Checking System Requirements"
@@ -34,9 +45,13 @@ check_requirements() {
   
   if [ "$node_major" -lt 16 ]; then
     warning "Node.js version $node_version detected. This script is optimized for Node.js 16 or later."
-    read -p "Continue anyway? (y/n): " continue_anyway
-    if [[ $continue_anyway != [yY] && $continue_anyway != [yY][eE][sS] ]]; then
-      exit 1
+    if [ "$AUTO_YES" = false ]; then
+      read -p "Continue anyway? (y/n): " continue_anyway
+      if [[ $continue_anyway != [yY] && $continue_anyway != [yY][eE][sS] ]]; then
+        exit 1
+      fi
+    else
+      echo "Auto-answering: yes"
     fi
   else
     success "Node.js version $node_version detected"
@@ -49,9 +64,13 @@ check_requirements() {
     success "Linux detected - using Linux-compatible commands"
   else
     warning "Unrecognized OS: $OSTYPE - this script is optimized for macOS and Linux"
-    read -p "Continue anyway? (y/n): " continue_anyway
-    if [[ $continue_anyway != [yY] && $continue_anyway != [yY][eE][sS] ]]; then
-      exit 1
+    if [ "$AUTO_YES" = false ]; then
+      read -p "Continue anyway? (y/n): " continue_anyway
+      if [[ $continue_anyway != [yY] && $continue_anyway != [yY][eE][sS] ]]; then
+        exit 1
+      fi
+    else
+      echo "Auto-answering: yes"
     fi
   fi
 }
@@ -86,7 +105,11 @@ check_env_file() {
     if [ -f .env.sample ]; then
       cp .env.sample .env
       echo "Created .env file from template. Please edit it with your specific values."
-      editor .env
+      if [ "$AUTO_YES" = false ]; then
+        editor .env
+      else
+        echo "Skipping interactive editor in auto mode. Please configure .env manually."
+      fi
     else
       error ".env.sample template not found. Please create a .env file manually."
     fi
@@ -107,7 +130,11 @@ check_env_file() {
   if [ ${#missing_vars[@]} -gt 0 ]; then
     warning "Missing required environment variables: ${missing_vars[*]}"
     echo "Please add them to your .env file"
-    read -p "Press Enter to continue after updating your .env file..."
+    if [ "$AUTO_YES" = false ]; then
+      read -p "Press Enter to continue after updating your .env file..."
+    else
+      echo "Auto-continuing without waiting in auto mode."
+    fi
   else
     success "All required environment variables found"
   fi
@@ -131,11 +158,15 @@ compile_contracts() {
 deploy_contracts() {
   section "Deploying Contracts to Base Sepolia"
   echo "This will deploy PuzzlePoints, ChainlinkAnswerVerifier, and QuestionManager contracts to Base Sepolia."
-  read -p "Continue? (y/n): " confirm
   
-  if [[ $confirm != [yY] && $confirm != [yY][eE][sS] ]]; then
-    warning "Deployment canceled"
-    exit 0
+  if [ "$AUTO_YES" = false ]; then
+    read -p "Continue? (y/n): " confirm
+    if [[ $confirm != [yY] && $confirm != [yY][eE][sS] ]]; then
+      warning "Deployment canceled"
+      exit 0
+    fi
+  else
+    echo "Auto-answering: yes"
   fi
   
   npx hardhat run scripts/deploy-base-sepolia.js --network baseSepoliaTestnet || error "Contract deployment failed"
@@ -249,19 +280,46 @@ test_deployment() {
 
 # Verify contracts on Basescan (optional)
 verify_contracts() {
-  read -p "Do you want to verify contracts on Basescan? (y/n): " verify
-  if [[ $verify == "y" || $verify == "Y" ]]; then
+  if [ "$AUTO_YES" = false ]; then
+    read -p "Do you want to verify contracts on Basescan? (y/n): " verify
+  else
+    verify="y"
+    echo "Auto-answering: yes for contract verification"
+  fi
+  
+  if [[ $verify == [yY] || $verify == [yY][eE][sS] ]]; then
     section "Verifying Contracts on Basescan"
     
     echo "Extracting contract addresses..."
-    PUZZLE_POINTS=$(extract_address "PuzzlePoints" deployments/addresses.json)
-    QUESTION_MANAGER=$(extract_address "QuestionManager" deployments/addresses.json)
-    CHAINLINK_VERIFIER=$(extract_address "ChainlinkAnswerVerifier" deployments/addresses.json)
+    # Explicitly specify the baseSepoliaTestnet network
+    ADDRESSES_FILE="deployments/addresses.json"
+    NETWORK="baseSepoliaTestnet"
+    
+    # Read the addresses directly from addresses.json for the specified network
+    if [ -f "$ADDRESSES_FILE" ]; then
+      PUZZLE_POINTS=$(grep -A 3 "\"$NETWORK\"" $ADDRESSES_FILE | grep "PuzzlePoints" | cut -d'"' -f4)
+      CHAINLINK_VERIFIER=$(grep -A 3 "\"$NETWORK\"" $ADDRESSES_FILE | grep "ChainlinkAnswerVerifier" | cut -d'"' -f4)
+      QUESTION_MANAGER=$(grep -A 3 "\"$NETWORK\"" $ADDRESSES_FILE | grep "QuestionManager" | cut -d'"' -f4)
+      
+      echo "Using addresses for $NETWORK:"
+      echo "PuzzlePoints: $PUZZLE_POINTS"
+      echo "ChainlinkAnswerVerifier: $CHAINLINK_VERIFIER"
+      echo "QuestionManager: $QUESTION_MANAGER"
+    else
+      error "Could not find addresses file at $ADDRESSES_FILE"
+      return 1
+    fi
     
     # Source .env file to get Router address and DON ID
     source .env
     ROUTER_ADDRESS=${FUNCTIONS_ROUTER_ADDRESS:-"0xde18200413f4b050a800590a6bca4e7eb7c24963"}
-    DON_ID=${FUNCTIONS_DONID:-"0x66756e2d62617365736570"}
+    
+    # Format the DON ID properly - need to use the raw hex string without 0x prefix for verification
+    DON_ID_RAW=${CHAINLINK_DON_ID:-"66756e2d62617365736570"}
+    # Remove 0x prefix if present
+    DON_ID_RAW=${DON_ID_RAW#0x}
+    # The format expected by the verifier
+    DON_ID="0x$DON_ID_RAW"
 
     echo "Verifying PuzzlePoints contract..."
     npx hardhat verify --network baseSepoliaTestnet $PUZZLE_POINTS || warning "Failed to verify PuzzlePoints contract"
@@ -270,7 +328,8 @@ verify_contracts() {
     npx hardhat verify --network baseSepoliaTestnet $CHAINLINK_VERIFIER $ROUTER_ADDRESS $DON_ID || warning "Failed to verify ChainlinkAnswerVerifier contract"
     
     echo "Verifying QuestionManager contract..."
-    npx hardhat verify --network baseSepoliaTestnet $QUESTION_MANAGER $PUZZLE_POINTS $CHAINLINK_VERIFIER || warning "Failed to verify QuestionManager contract"
+    # QuestionManager only takes one parameter - the PuzzlePoints address
+    npx hardhat verify --network baseSepoliaTestnet $QUESTION_MANAGER $PUZZLE_POINTS || warning "Failed to verify QuestionManager contract"
     
     success "Contract verification completed"
   else
@@ -282,7 +341,13 @@ verify_contracts() {
 setup_config_json() {
   section "Setting Up config.json (Optional)"
   
-  read -p "Do you want to set up the config.json structure for better configuration management? (y/n): " confirm
+  if [ "$AUTO_YES" = false ]; then
+    read -p "Do you want to set up the config.json structure for better configuration management? (y/n): " confirm
+  else
+    confirm="y"
+    echo "Auto-answering: yes for config.json setup"
+  fi
+  
   if [[ $confirm != [yY] && $confirm != [yY][eE][sS] ]]; then
     warning "config.json setup skipped"
     return
@@ -450,6 +515,10 @@ main() {
   echo "====================================================="
   echo -e "${NC}"
   
+  if [ "$AUTO_YES" = true ]; then
+    echo "Running in non-interactive mode (-y flag detected)"
+  fi
+  
   echo "This script will guide you through the entire deployment process:"
   echo "  1. Check system requirements"
   echo "  2. Check environment configuration"
@@ -463,7 +532,11 @@ main() {
   echo "  10. Verify contracts (optional)"
   echo "  11. Setup config.json (optional)"
   
-  read -p "Press Enter to start the deployment process..."
+  if [ "$AUTO_YES" = false ]; then
+    read -p "Press Enter to start the deployment process..."
+  else
+    echo "Starting deployment process automatically..."
+  fi
   
   # Run all steps in sequence
   check_requirements

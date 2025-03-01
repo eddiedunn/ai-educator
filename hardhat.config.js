@@ -5,6 +5,9 @@ require('dotenv').config();
 // Import the task function from Hardhat
 const { task } = require("hardhat/config");
 
+// Load the Chainlink diagnostic tasks
+require("./tasks/chainlink-diagnostic");
+
 // Get environment variables or use defaults
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "https://sepolia.infura.io/v3/your-api-key";
