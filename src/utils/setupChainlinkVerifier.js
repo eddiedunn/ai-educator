@@ -145,7 +145,6 @@ export async function testChainlinkVerifier(
   
   try {
     const signer = provider.getSigner();
-    const account = await signer.getAddress();
     
     // Create contract instance
     const questionManagerAbi = [
@@ -235,6 +234,11 @@ export async function testChainlinkVerifier(
 export async function getChainlinkSetupConfig(provider, questionManagerAddress) {
   try {
     const signer = provider.getSigner();
+    const signerAddress = await signer.getAddress();
+    const network = await provider.getNetwork();
+    
+    console.log(`Attempting to get Chainlink config from ${questionManagerAddress} on chain ${network.chainId} (${network.name})`);
+    console.log(`Using signer: ${signerAddress}`);
     
     // Create contract instance
     const questionManagerAbi = [
@@ -249,26 +253,83 @@ export async function getChainlinkSetupConfig(provider, questionManagerAddress) 
       signer
     );
     
-    // Get current configuration
-    const [verifierStatus, chainlinkConfig, sourceCode] = await Promise.all([
-      questionManager.getVerifierStatus(),
-      questionManager.chainlinkConfig(),
-      questionManager.sourceCode()
-    ]);
+    // Test if contract exists and is accessible
+    try {
+      await provider.getCode(questionManagerAddress);
+    } catch (codeError) {
+      console.error("Error getting contract code:", codeError);
+      return {
+        success: false,
+        message: `Contract not found or not accessible at ${questionManagerAddress}. Make sure you're on the correct network.`,
+        error: codeError
+      };
+    }
+    
+    // Attempt to get each piece of data individually with specific error handling
+    let verifierStatus, chainlinkConfig, sourceCode;
+    
+    try {
+      verifierStatus = await questionManager.getVerifierStatus();
+      console.log("Successfully retrieved verifier status:", verifierStatus);
+    } catch (verifierError) {
+      console.error("Error getting verifier status:", verifierError);
+      return {
+        success: false,
+        message: `Contract doesn't support getVerifierStatus or function reverted: ${verifierError.message}`,
+        error: verifierError,
+        contractAddress: questionManagerAddress,
+        networkInfo: network
+      };
+    }
+    
+    try {
+      chainlinkConfig = await questionManager.chainlinkConfig();
+      console.log("Successfully retrieved chainlink config:", chainlinkConfig);
+    } catch (configError) {
+      console.error("Error getting chainlink config:", configError);
+      return {
+        success: false,
+        message: `Contract doesn't support chainlinkConfig or function reverted: ${configError.message}`,
+        error: configError,
+        verifierStatus,
+        contractAddress: questionManagerAddress,
+        networkInfo: network
+      };
+    }
+    
+    try {
+      sourceCode = await questionManager.sourceCode();
+      console.log("Successfully retrieved source code");
+    } catch (sourceError) {
+      console.error("Error getting source code:", sourceError);
+      return {
+        success: false,
+        message: `Contract doesn't support sourceCode or function reverted: ${sourceError.message}`,
+        error: sourceError,
+        verifierStatus,
+        chainlinkConfig,
+        contractAddress: questionManagerAddress,
+        networkInfo: network
+      };
+    }
     
     return {
       success: true,
       verifierStatus,
       chainlinkConfig,
       sourceCode,
-      isConfigured: verifierStatus.configured
+      isConfigured: verifierStatus.configured,
+      contractAddress: questionManagerAddress,
+      networkInfo: network
     };
   } catch (error) {
     console.error("Error getting Chainlink configuration:", error);
     return {
       success: false,
       message: `Error getting Chainlink configuration: ${error.message || error}`,
-      error
+      error,
+      contractAddress: questionManagerAddress,
+      networkInfo: await provider.getNetwork().catch(e => ({ error: e.message }))
     };
   }
 }

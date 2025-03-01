@@ -1,28 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Button, Badge, Alert, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Row, Col, Button, Alert, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
 const AvailableQuestionSets = ({ questionManager }) => {
   const [questionSets, setQuestionSets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedQuestionSet, setSelectedQuestionSet] = useState(null);
   const [processingId, setProcessingId] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    console.log("AvailableQuestionSets mounted. questionManager:", questionManager ? "Connected" : "Not connected");
-    
-    if (questionManager) {
-      console.log("Question Manager Address:", questionManager.address);
-      fetchQuestionSets();
-    } else {
-      console.warn("No questionManager provided to AvailableQuestionSets component");
-      setLoading(false);
-    }
-  }, [questionManager]);
-
-  const fetchQuestionSets = async () => {
+  const fetchQuestionSets = useCallback(async () => {
     console.log("Fetching question sets...");
     setLoading(true);
     setError(null);
@@ -127,7 +114,19 @@ const AvailableQuestionSets = ({ questionManager }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [questionManager]);
+
+  useEffect(() => {
+    console.log("AvailableQuestionSets mounted. questionManager:", questionManager ? "Connected" : "Not connected");
+    
+    if (questionManager) {
+      console.log("Question Manager Address:", questionManager.address);
+      fetchQuestionSets();
+    } else {
+      console.warn("No questionManager provided to AvailableQuestionSets component");
+      setLoading(false);
+    }
+  }, [questionManager, fetchQuestionSets]);
 
   const handleStartAssessment = async (questionSetId) => {
     try {

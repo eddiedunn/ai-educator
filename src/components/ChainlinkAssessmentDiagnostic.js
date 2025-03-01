@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Card, Button, Spinner, Alert, ListGroup, Badge } from 'react-bootstrap';
-import { ethers } from 'ethers';
 import { submitWithGasEstimate } from '../utils/contractTestUtils';
 
 const ChainlinkAssessmentDiagnostic = ({ 

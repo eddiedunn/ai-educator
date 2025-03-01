@@ -29,8 +29,8 @@ describe("PuzzlePoints", function () {
       const symbol = await puzzlePoints.symbol();
       const decimals = await puzzlePoints.decimals();
       
-      assert.equal(name, "Puzzle Points");
-      assert.equal(symbol, "PP");
+      assert.equal(name, "PZL Token");
+      assert.equal(symbol, "PZL");
       assert.equal(decimals, 18);
     });
   });
@@ -69,7 +69,7 @@ describe("PuzzlePoints", function () {
       try {
         await puzzlePoints.connect(user1).transfer(user2.address, transferAmount);
       } catch (error) {
-        assert.include(error.message, "Points are non-transferable");
+        assert.include(error.message, "Tokens are non-transferable");
         transferFailed = true;
       }
       assert.isTrue(transferFailed, "Transfer should have failed");
@@ -90,7 +90,7 @@ describe("PuzzlePoints", function () {
           ethers.utils.parseEther("25")
         );
       } catch (error) {
-        assert.include(error.message, "Points are non-transferable");
+        assert.include(error.message, "Tokens are non-transferable");
         transferFromFailed = true;
       }
       assert.isTrue(transferFromFailed, "TransferFrom should have failed");

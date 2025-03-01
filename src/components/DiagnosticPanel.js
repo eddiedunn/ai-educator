@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Card, Button, Accordion, Badge, Spinner, Alert } from 'react-bootstrap';
-import { ethers } from 'ethers';
 import {
   checkQuestionSet,
   checkPreviousAssessment,
@@ -70,40 +69,6 @@ const DiagnosticPanel = ({ questionSetId, questionManager }) => {
       setResults(prev => ({ ...prev, assessment: assessmentResult }));
     } catch (err) {
       setError(`Error restarting assessment: ${err.message}`);
-    }
-  };
-  
-  const handleDisableChainlink = async () => {
-    if (!questionManager) {
-      setError("Question manager not available");
-      return;
-    }
-    
-    try {
-      await disableChainlinkTemporarily(questionManager);
-      // Re-run the verifier check
-      const provider = questionManager.provider;
-      const verifierResult = await checkVerifierSetup(questionManager, provider);
-      setResults(prev => ({ ...prev, verifier: verifierResult }));
-    } catch (err) {
-      setError(`Error disabling Chainlink: ${err.message}`);
-    }
-  };
-  
-  const handleEnableChainlink = async () => {
-    if (!questionManager) {
-      setError("Question manager not available");
-      return;
-    }
-    
-    try {
-      await enableChainlink(questionManager);
-      // Re-run the verifier check
-      const provider = questionManager.provider;
-      const verifierResult = await checkVerifierSetup(questionManager, provider);
-      setResults(prev => ({ ...prev, verifier: verifierResult }));
-    } catch (err) {
-      setError(`Error enabling Chainlink: ${err.message}`);
     }
   };
   

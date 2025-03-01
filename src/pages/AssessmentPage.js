@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, Button, Form, Alert, Spinner, ProgressBar, Container } from 'react-bootstrap';
-import { retrieveQuestionSet, submitAnswersToBlockchain, storeAnswers } from '../utils/answerStorage';
+import { retrieveQuestionSet, storeAnswers } from '../utils/answerStorage';
 import { debugLog, isDebugMode } from '../utils/debug';
 import { evaluateWithOpenAI } from '../utils/llmEvaluator';
 import { Link } from 'react-router-dom';

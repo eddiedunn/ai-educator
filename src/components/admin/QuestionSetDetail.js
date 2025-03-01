@@ -1,17 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, ListGroup, Badge, Alert, Modal, Spinner } from 'react-bootstrap';
-import { ethers } from 'ethers';
 
 const QuestionSetDetail = ({ questionSetId, onClose, questionManager }) => {
   const [questionSet, setQuestionSet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchQuestionSet();
-  }, [questionSetId]);
-
-  const fetchQuestionSet = async () => {
+  const fetchQuestionSet = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -65,7 +60,11 @@ const QuestionSetDetail = ({ questionSetId, onClose, questionManager }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [questionSetId, questionManager]);
+
+  useEffect(() => {
+    fetchQuestionSet();
+  }, [fetchQuestionSet]);
 
   if (loading) {
     return (

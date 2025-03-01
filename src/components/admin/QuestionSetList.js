@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Button, Badge, Alert, Spinner } from 'react-bootstrap';
-import { ethers } from 'ethers';
 import QuestionSetDetail from './QuestionSetDetail';
 
 const QuestionSetList = ({ questionManager, refreshCounter, onQuestionSetUpdated }) => {
@@ -10,11 +9,7 @@ const QuestionSetList = ({ questionManager, refreshCounter, onQuestionSetUpdated
   const [commitLoading, setCommitLoading] = useState({});
   const [selectedQuestionSet, setSelectedQuestionSet] = useState(null);
 
-  useEffect(() => {
-    fetchQuestionSets();
-  }, [refreshCounter, questionManager]);
-
-  const fetchQuestionSets = async () => {
+  const fetchQuestionSets = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -102,7 +97,11 @@ const QuestionSetList = ({ questionManager, refreshCounter, onQuestionSetUpdated
     } finally {
       setLoading(false);
     }
-  };
+  }, [questionManager]);
+
+  useEffect(() => {
+    fetchQuestionSets();
+  }, [refreshCounter, fetchQuestionSets]);
 
   const handleViewQuestionSet = (id) => {
     setSelectedQuestionSet(id);

@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, ListGroup, Badge, Alert } from 'react-bootstrap';
-import { ethers } from 'ethers';
+import React, { useState } from 'react';
+import { Alert } from 'react-bootstrap';
 import QuestionSetList from './QuestionSetList';
 import QuestionSetForm from './QuestionSetForm';
-import ChainlinkSetup from './ChainlinkSetup';
+import Leaderboard from './Leaderboard';
 
 const AdminPanel = ({ account, puzzlePoints, questionManager }) => {
   const [statusMessage, setStatusMessage] = useState(null);
@@ -27,16 +26,13 @@ const AdminPanel = ({ account, puzzlePoints, questionManager }) => {
           onQuestionSetCreated={handleRefresh} 
         />
         
-        <ChainlinkSetup 
-          provider={questionManager?.provider}
-          questionManagerAddress={questionManager?.address}
-        />
-        
         <QuestionSetList 
           questionManager={questionManager} 
           refreshCounter={refreshCounter}
           onQuestionSetUpdated={handleRefresh}
         />
+        
+        <Leaderboard puzzlePoints={puzzlePoints} />
       </div>
     </div>
   );

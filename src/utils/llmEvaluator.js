@@ -30,8 +30,6 @@ const retrieveAnswersFromStorage = (answersHash) => {
     if (key.startsWith('answers_')) {
       try {
         const data = JSON.parse(localStorage.getItem(key));
-        // Manually calculate hash to compare
-        const dataString = JSON.stringify(data);
         // We'd need ethers.js here for a proper implementation
         // For now, we'll just assume we found the right one if it has the expected format
         if (data.answers && data.questionSetId) {

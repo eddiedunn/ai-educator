@@ -44,8 +44,8 @@ export const IPFS_CONFIG = {
 
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
-  puzzlePoints: '0x26eB62bB2a5eBd450B3EFB712D9339C89c755d22',
-  questionManager: '0x79d4C3c94A3837E75b6abaB3992Ee3Adc8976ea5'
+  puzzlePoints: '0x351A7347D9Defa57D0e6d0AB9F5cA392634f788A',
+  questionManager: '0x9E47ff9cE7b3619A8c70a5498D28Fa5953A53d90'
 };
 
 // Test accounts

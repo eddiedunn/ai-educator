@@ -11,6 +11,8 @@ import Loading from './Loading';
 import AdminPage from '../pages/AdminPage';
 import UserPage from '../pages/UserPage';
 import AssessmentPage from '../pages/AssessmentPage';
+import ChainlinkAdminPage from '../pages/ChainlinkAdminPage';
+import LeaderboardPage from '../pages/LeaderboardPage';
 
 // ABIs: Import your contract ABIs here
 import PuzzlePointsArtifact from '../abis/contracts/PuzzlePoints.sol/PuzzlePoints.json';
@@ -353,6 +355,26 @@ function App() {
               ) : (
                 <Navigate to="/" replace />
               )
+            } 
+          />
+          <Route 
+            path="/chainlink-admin" 
+            element={
+              userRole === 'admin' ? (
+                <ChainlinkAdminPage 
+                  questionManager={questionManager} 
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            } 
+          />
+          <Route 
+            path="/leaderboard" 
+            element={
+              <LeaderboardPage 
+                puzzlePoints={puzzlePoints} 
+              />
             } 
           />
         </Routes>
