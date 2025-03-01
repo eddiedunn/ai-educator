@@ -13,6 +13,7 @@ import UserPage from '../pages/UserPage';
 import AssessmentPage from '../pages/AssessmentPage';
 import ChainlinkAdminPage from '../pages/ChainlinkAdminPage';
 import LeaderboardPage from '../pages/LeaderboardPage';
+import DebugPage from '../pages/DebugPage';
 
 // ABIs: Import your contract ABIs here
 import PuzzlePointsArtifact from '../abis/contracts/PuzzlePoints.sol/PuzzlePoints.json';
@@ -374,7 +375,22 @@ function App() {
             element={
               <LeaderboardPage 
                 puzzlePoints={puzzlePoints} 
+                account={account}
               />
+            } 
+          />
+          <Route 
+            path="/debug" 
+            element={
+              userRole === 'admin' ? (
+                <DebugPage 
+                  account={account}
+                  puzzlePoints={puzzlePoints}
+                  questionManager={questionManager} 
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             } 
           />
         </Routes>

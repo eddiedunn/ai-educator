@@ -263,9 +263,9 @@ contract QuestionManager is Ownable {
     /// @param answersHash Hash of the answers JSON blob stored off-chain
     function submitAssessmentAnswers(string memory questionSetId, bytes32 answersHash) public {
         // Check if question set exists and is active
-        require(bytes(questionSets[questionSetId].setId).length > 0, "Question set does not exist");
-        require(questionSets[questionSetId].active, "Question set is not active");
-        require(answersHash != bytes32(0), "Answers hash cannot be empty");
+        require(bytes(questionSets[questionSetId].setId).length > 0, "Question set does not exist: make sure the ID is correct");
+        require(questionSets[questionSetId].active, "Question set is not active: the set may be disabled or in draft state");
+        require(answersHash != bytes32(0), "Answers hash cannot be empty: hash format may be incorrect");
         
         // Check if user already completed this assessment
         UserAssessment storage assessment = userAssessments[msg.sender];
@@ -274,7 +274,19 @@ contract QuestionManager is Ownable {
         if (bytes(assessment.questionSetId).length > 0 && 
             keccak256(bytes(assessment.questionSetId)) == keccak256(bytes(questionSetId)) && 
             assessment.completed) {
-            revert("You have already completed this assessment");
+            revert("You have already completed this assessment: duplicate submissions are not allowed");
+        }
+        
+        // Check verifier configuration before allowing submission
+        if (useChainlinkFunctions) {
+            require(address(answerVerifier) != address(0), "Answer verifier not set: contract configuration issue");
+            
+            // These external calls can throw their own errors
+            uint64 subId = answerVerifier.subscriptionId();
+            require(subId != 0, "Chainlink Functions subscription ID not set: verifier misconfigured");
+            
+            bytes32 donId = answerVerifier.donID();
+            require(donId != bytes32(0), "Chainlink Functions DON ID not set: verifier misconfigured");
         }
         
         // Reset assessment data
@@ -294,6 +306,8 @@ contract QuestionManager is Ownable {
         
         // If Chainlink Functions is enabled, automatically start verification
         if (useChainlinkFunctions && address(answerVerifier) != address(0)) {
+            // We can't use try/catch on internal functions, so we'll just call it directly
+            // and let any errors propagate
             _startVerification(assessment);
         }
     }

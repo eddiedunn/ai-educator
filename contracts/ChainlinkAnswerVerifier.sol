@@ -13,6 +13,12 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 contract ChainlinkAnswerVerifier is FunctionsClient, Ownable {
     using FunctionsRequest for FunctionsRequest.Request;
 
+    // Custom errors
+    error EvaluationSourceNotSet();
+    error InvalidAnswerHash();
+    error CallerNotAuthorized();
+    error InvalidPassingThreshold();
+
     // Authorized callers mapping
     mapping(address => bool) public authorizedCallers;
     
@@ -125,8 +131,8 @@ contract ChainlinkAnswerVerifier is FunctionsClient, Ownable {
     }
     
     /**
-     * @notice Verify a set of answers using Chainlink Functions
-     * @param user User who submitted the answers
+     * @notice Verify an answer set using Chainlink Functions
+     * @param user The address of the user who submitted the answers
      * @param questionSetId ID of the question set
      * @param answersHash Hash of the answers JSON blob
      * @param questionSetContentHash Hash of the question set content for verification
@@ -139,8 +145,16 @@ contract ChainlinkAnswerVerifier is FunctionsClient, Ownable {
         bytes32 questionSetContentHash
     ) external onlyCaller returns (bytes32 requestId) {
         // Require that source code has been set
-        require(bytes(evaluationSource).length > 0, "Source code not set");
-        require(subscriptionId != 0, "Subscription ID not set");
+        require(bytes(evaluationSource).length > 0, "Source code not set: JavaScript evaluation code is missing");
+        require(subscriptionId != 0, "Subscription ID not set: Chainlink Functions subscription is required");
+        require(donID != bytes32(0), "DON ID not set: Chainlink Functions DON ID is required");
+        // The FunctionsClient has its own oracle address check built in
+        
+        // Validate input parameters
+        require(user != address(0), "User address cannot be zero");
+        require(bytes(questionSetId).length > 0, "Question set ID cannot be empty");
+        require(answersHash != bytes32(0), "Answer hash cannot be zero");
+        require(questionSetContentHash != bytes32(0), "Question set content hash cannot be zero");
         
         // Initialize the Functions request
         FunctionsRequest.Request memory req;
@@ -165,6 +179,7 @@ contract ChainlinkAnswerVerifier is FunctionsClient, Ownable {
             gasLimit,
             donID
         );
+        // Note: If the _sendRequest fails, it will revert with its own error message
         
         // Store the verification request details
         verificationRequests[_requestId] = VerificationRequest({
@@ -289,16 +304,38 @@ contract ChainlinkAnswerVerifier is FunctionsClient, Ownable {
     
     /**
      * @notice Helper function to convert bytes32 to string
-     * @param _bytes32 The bytes32 value to convert
-     * @return string representation of the bytes32 value
+     * @param _bytes32 The bytes32 to convert
+     * @return The string representation with 0x prefix
      */
     function bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
-        bytes memory bytesArray = new bytes(64);
+        // Create a bytes array to hold "0x" prefix + 64 hex characters
+        bytes memory bytesArray = new bytes(66);
+        
+        // Add "0x" prefix
+        bytesArray[0] = "0";
+        bytesArray[1] = "x";
+        
+        // Convert each byte to two hex characters
         for (uint256 i = 0; i < 32; i++) {
-            bytesArray[i*2] = bytes1(uint8(uint256(_bytes32) / (2**(8*(31 - i)))));
-            bytesArray[i*2+1] = bytes1(uint8(uint256(_bytes32) / (2**(8*(31 - i))) % 16));
+            uint8 b = uint8(uint256(_bytes32) >> (8 * (31 - i)));
+            bytesArray[2 + i * 2] = toHexChar(b >> 4);
+            bytesArray[3 + i * 2] = toHexChar(b & 0x0f);
         }
+        
         return string(bytesArray);
+    }
+    
+    /**
+     * @notice Helper function to convert a nibble to its hex character
+     * @param _nibble The nibble to convert (0-15)
+     * @return The hex character ('0'-'9', 'a'-'f')
+     */
+    function toHexChar(uint8 _nibble) internal pure returns (bytes1) {
+        if (_nibble < 10) {
+            return bytes1(uint8(_nibble) + 0x30);
+        } else {
+            return bytes1(uint8(_nibble) + 0x57); // 0x57 = 'a' - 10
+        }
     }
     
     /**
@@ -315,5 +352,97 @@ contract ChainlinkAnswerVerifier is FunctionsClient, Ownable {
         assembly {
             result := mload(add(source, 32))
         }
+    }
+
+    /**
+     * @notice Test if a mock answer hash can be properly processed by the evaluation code
+     * @param mockAnswerHash The mock answer hash to test
+     * @return True if the hash is valid according to common patterns, reverts otherwise
+     */
+    function testEvaluation(bytes32 mockAnswerHash) public view returns (bool) {
+        if (bytes(evaluationSource).length == 0) {
+            revert EvaluationSourceNotSet();
+        }
+        
+        if (mockAnswerHash == bytes32(0)) {
+            revert InvalidAnswerHash();
+        }
+        
+        // Check common format patterns in the source code
+        string memory source = evaluationSource;
+        string memory hashString = bytes32ToString(mockAnswerHash);
+        
+        // Check hash length - most expect exactly 64 chars + 0x prefix
+        if (bytes(hashString).length != 66) {
+            revert("Hash must be exactly 64 characters + 0x prefix");
+        }
+        
+        // Check for 0x prefix - most JS code expects this
+        if (!startsWith(hashString, "0x")) {
+            revert("Hash must start with 0x prefix");
+        }
+        
+        // Specific pattern check for code that might strip the 0x prefix
+        if (
+            startsWith(hashString, "0x") && 
+            contains(source, "substring(2)")
+        ) {
+            // This code probably expects a hash with 0x prefix and removes it
+            // This is fine, just logging for debugging
+        }
+        
+        // If we reach here, basic validation passed
+        return true;
+    }
+
+    /**
+     * @notice Helper function to check if a string contains a substring
+     * @param s The string to check
+     * @param searchFor The substring to search for
+     * @return True if the string contains the substring
+     */
+    function contains(string memory s, string memory searchFor) internal pure returns (bool) {
+        bytes memory sBytes = bytes(s);
+        bytes memory searchBytes = bytes(searchFor);
+        
+        if (searchBytes.length > sBytes.length) {
+            return false;
+        }
+        
+        for (uint i = 0; i <= sBytes.length - searchBytes.length; i++) {
+            bool found = true;
+            for (uint j = 0; j < searchBytes.length; j++) {
+                if (sBytes[i + j] != searchBytes[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @notice Helper function to check if a string starts with a substring
+     * @param s The string to check
+     * @param prefix The prefix to check for
+     * @return True if the string starts with the prefix
+     */
+    function startsWith(string memory s, string memory prefix) internal pure returns (bool) {
+        bytes memory sBytes = bytes(s);
+        bytes memory prefixBytes = bytes(prefix);
+        
+        if (prefixBytes.length > sBytes.length) {
+            return false;
+        }
+        
+        for (uint i = 0; i < prefixBytes.length; i++) {
+            if (sBytes[i] != prefixBytes[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 } 

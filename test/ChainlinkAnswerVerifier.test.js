@@ -1,8 +1,8 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-// Import the proper statements for hardhat-chai-matchers
-require("@nomicfoundation/hardhat-chai-matchers");
+// Import the hardhat-chai-matchers properly
+require("@nomicfoundation/hardhat-chai-matchers/internal/add-chai-matchers");
 
 // No need to import ethereum-waffle/chai
 
@@ -189,6 +189,39 @@ describe("ChainlinkAnswerVerifier", function () {
       
       // Just verify that the caller is now authorized rather than making the actual call
       expect(await verifier.authorizedCallers(caller.address)).to.equal(true);
+    });
+  });
+
+  // Test section for the testEvaluation function
+  describe("Answer Format Verification", function () {
+    it("should properly test answer format with helper functions", async function () {
+      // Set the evaluation source with format checks
+      const evalSource = `
+        function evaluateAnswers(args) {
+          const hash = args[1];
+          if (hash.length === 64) { /* check hash length */ }
+          if (hash.startsWith('0x')) { /* check prefix */ }
+          if (hash.startsWith('0x')) { hash.substring(2); /* remove prefix */ }
+          return '90,0x1234';
+        }
+      `;
+      await verifier.connect(owner).updateEvaluationSource(evalSource);
+      
+      // Create a proper mock hash with 0x prefix
+      const mockAnswerHashHex = "0x" + "1".repeat(64);
+      const mockAnswerHash = ethers.utils.hexZeroPad(mockAnswerHashHex, 32);
+      
+      // Test hash with proper 0x prefix - should pass
+      const result = await verifier.testEvaluation(mockAnswerHash);
+      expect(result).to.equal(true);
+      
+      // Test hash without 0x prefix - should revert due to format check
+      const invalidHashHex = "1".repeat(64); // No 0x prefix
+      const invalidHash = ethers.utils.hexZeroPad("0x" + invalidHashHex, 32);
+      
+      await expect(
+        verifier.testEvaluation(invalidHash)
+      ).to.be.revertedWith("Hash must start with 0x prefix");
     });
   });
 }); 

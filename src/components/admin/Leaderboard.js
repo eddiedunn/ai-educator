@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Spinner, Alert, Badge } from 'react-bootstrap';
 import { ethers } from 'ethers';
 
-const Leaderboard = ({ puzzlePoints }) => {
+const Leaderboard = ({ puzzlePoints, account }) => {
   const [loading, setLoading] = useState(true);
   const [holders, setHolders] = useState([]);
   const [totalHolders, setTotalHolders] = useState(0);
@@ -98,13 +98,28 @@ const Leaderboard = ({ puzzlePoints }) => {
                   <td colSpan="3" className="text-center">No holders found</td>
                 </tr>
               ) : (
-                holders.map((holder, index) => (
-                  <tr key={holder.address}>
-                    <td>{index + 1}</td>
-                    <td>{shortenAddress(holder.address)}</td>
-                    <td className="text-end">{parseFloat(holder.balance).toFixed(2)} PZL</td>
-                  </tr>
-                ))
+                holders.map((holder, index) => {
+                  // Check if this holder is the connected account (case-insensitive comparison)
+                  const isConnectedAccount = account && 
+                    holder.address.toLowerCase() === account.toLowerCase();
+                  
+                  return (
+                    <tr 
+                      key={holder.address} 
+                      className={isConnectedAccount ? "table-primary" : ""}
+                      style={isConnectedAccount ? { fontWeight: 'bold' } : {}}
+                    >
+                      <td>{index + 1}</td>
+                      <td>
+                        {shortenAddress(holder.address)}
+                        {isConnectedAccount && 
+                          <Badge bg="info" className="ms-2">You</Badge>
+                        }
+                      </td>
+                      <td className="text-end">{parseFloat(holder.balance).toFixed(2)} PZL</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </Table>

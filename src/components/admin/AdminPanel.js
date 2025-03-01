@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Alert } from 'react-bootstrap';
 import QuestionSetList from './QuestionSetList';
 import QuestionSetForm from './QuestionSetForm';
-import Leaderboard from './Leaderboard';
 
 const AdminPanel = ({ account, puzzlePoints, questionManager }) => {
   const [statusMessage, setStatusMessage] = useState(null);
@@ -31,8 +30,6 @@ const AdminPanel = ({ account, puzzlePoints, questionManager }) => {
           refreshCounter={refreshCounter}
           onQuestionSetUpdated={handleRefresh}
         />
-        
-        <Leaderboard puzzlePoints={puzzlePoints} />
       </div>
     </div>
   );

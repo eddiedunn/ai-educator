@@ -2,7 +2,7 @@ import React from 'react';
 import { Container, Card } from 'react-bootstrap';
 import Leaderboard from '../components/admin/Leaderboard';
 
-const LeaderboardPage = ({ puzzlePoints }) => {
+const LeaderboardPage = ({ puzzlePoints, account }) => {
   return (
     <Container className="mt-4">
       <Card className="mb-4">
@@ -15,7 +15,7 @@ const LeaderboardPage = ({ puzzlePoints }) => {
         </Card.Body>
       </Card>
       
-      <Leaderboard puzzlePoints={puzzlePoints} />
+      <Leaderboard puzzlePoints={puzzlePoints} account={account} />
     </Container>
   );
 };

@@ -43,6 +43,10 @@ const Navigation = ({ account, userRole, tokenBalance }) => {
                 <LinkContainer to="/leaderboard">
                   <Nav.Link style={{ color: 'var(--primary)' }}>Leaderboard</Nav.Link>
                 </LinkContainer>
+                
+                <LinkContainer to="/debug">
+                  <Nav.Link style={{ color: 'var(--warning)' }}>Debug</Nav.Link>
+                </LinkContainer>
               </>
             )}
 
