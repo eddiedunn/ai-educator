@@ -9,6 +9,8 @@ import { metaMaskHooks } from '../utils/connectors';
 import { activateInjectedConnector } from '../utils/connectors';
 import { quickPreSubmissionCheck, submitWithGasEstimate } from '../utils/contractTestUtils';
 import DiagnosticPanel from '../components/DiagnosticPanel';
+import ChainlinkAssessmentDiagnostic from '../components/ChainlinkAssessmentDiagnostic';
+import { ethers } from 'ethers';
 
 const { useAccounts } = metaMaskHooks;
 
@@ -24,6 +26,7 @@ const AssessmentPage = ({ questionManager }) => {
   const [message, setMessage] = useState(null);
   const [questionSetData, setQuestionSetData] = useState(null);
   const [submitError, setSubmitError] = useState(null);
+  const [showChainlinkDiagnostics, setShowChainlinkDiagnostics] = useState(false);
   
   // Use metaMask hooks
   const accounts = useAccounts();
@@ -386,22 +389,59 @@ const AssessmentPage = ({ questionManager }) => {
                       Next
                     </Button>
                   ) : (
-                    <Button 
-                      variant="success" 
-                      onClick={handleSubmitAssessment}
-                      disabled={submitting}
-                    >
-                      {submitting ? (
-                        <>
-                          <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />{' '}
-                          Submitting...
-                        </>
-                      ) : 'Submit Assessment'}
-                    </Button>
+                    <div className="d-flex">
+                      {questionSetData?.verificationMethod === 'chainlink' && (
+                        <Button 
+                          variant="secondary" 
+                          className="me-2"
+                          onClick={() => setShowChainlinkDiagnostics(!showChainlinkDiagnostics)}
+                          disabled={submitting}
+                        >
+                          {showChainlinkDiagnostics ? 'Hide Diagnostics' : 'Diagnostics'}
+                        </Button>
+                      )}
+                      <Button 
+                        variant="success" 
+                        onClick={handleSubmitAssessment}
+                        disabled={submitting}
+                      >
+                        {submitting ? (
+                          <>
+                            <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />{' '}
+                            Submitting...
+                          </>
+                        ) : 'Submit Assessment'}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </Card.Body>
             </Card>
+          )}
+
+          {/* Chainlink Assessment Diagnostic */}
+          {questionManager && id && questionSetData?.verificationMethod === 'chainlink' && 
+           showChainlinkDiagnostics && (
+            <div className="mt-4">
+              <ChainlinkAssessmentDiagnostic 
+                questionManager={questionManager}
+                questionSetId={id}
+                answersHash={ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify({
+                  questionSetId: id,
+                  answers: questions.map(q => ({ questionId: q.id, answer: answers[q.id] || '' })),
+                  timestamp: new Date().toISOString(),
+                  version: '1.0'
+                })))}
+                onComplete={(result) => {
+                  if (result.success) {
+                    setMessage({
+                      type: 'success',
+                      text: 'Diagnostic passed! You can submit your assessment.'
+                    });
+                  }
+                }}
+              />
+            </div>
           )}
 
           {/* Add diagnostic panel */}

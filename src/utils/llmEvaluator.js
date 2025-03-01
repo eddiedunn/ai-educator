@@ -274,5 +274,10 @@ function chainlinkFunction(args) {
     });
 }
 
-// Export everything using ES module syntax
-export { evaluateWithOpenAI, mockEvaluateWithOpenAI, chainlinkFunction, evaluateAnswers }; 
+// Export using CommonJS module.exports syntax
+module.exports = { 
+  evaluateWithOpenAI, 
+  mockEvaluateWithOpenAI, 
+  chainlinkFunction, 
+  evaluateAnswers 
+};

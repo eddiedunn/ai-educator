@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Button, Accordion, Badge, Spinner } from 'react-bootstrap';
+import { Card, Button, Accordion, Badge, Spinner, Alert } from 'react-bootstrap';
 import { ethers } from 'ethers';
 import {
   checkQuestionSet,
@@ -272,51 +272,137 @@ const DiagnosticPanel = ({ questionSetId, questionManager }) => {
     if (!result) return null;
     
     return (
-      <div className="mt-3">
-        <h6>Chainlink Verifier Status</h6>
-        <Badge bg={result.enabled ? (result.configured ? "success" : "danger") : "secondary"}>
-          {!result.enabled ? "Disabled" : (result.configured ? "Configured ✓" : "Misconfigured ✗")}
-        </Badge>
-        
-        {result.enabled && !result.configured && (
-          <div className="mt-2">
-            <div className="alert alert-danger">
-              <small>
-                Chainlink verifier is enabled but not properly configured. 
-                {result.reason && <div>Reason: {result.reason}</div>}
-              </small>
-            </div>
-            <Button 
-              variant="warning" 
-              size="sm" 
-              onClick={handleDisableChainlink}
-            >
-              Temporarily Disable Chainlink
-            </Button>
-            <div className="mt-1">
-              <small>Only works if you're the contract owner.</small>
-            </div>
+      <Card className="mb-3">
+        <Card.Header>Chainlink Verifier Status</Card.Header>
+        <Card.Body>
+          <strong>Status: </strong>
+          {result.configured ? (
+            <Badge bg="success" className="ms-1">Configured Correctly</Badge>
+          ) : (
+            <Badge bg="danger" className="ms-1">Configuration Issue</Badge>
+          )}
+          
+          <div className="mt-3">
+            <strong>Details:</strong>
+            <ul className="mt-2">
+              {result.status && (
+                <li>
+                  <strong>Status:</strong> {result.status}
+                </li>
+              )}
+              
+              {result.message && (
+                <li>
+                  <strong>Message:</strong> {result.message}
+                </li>
+              )}
+              
+              {result.address && (
+                <li>
+                  <strong>Verifier Address:</strong> {result.address}
+                </li>
+              )}
+              
+              {result.isAuthorized !== undefined && (
+                <li>
+                  <strong>QuestionManager Authorized:</strong>{' '}
+                  {result.isAuthorized ? (
+                    <span className="text-success">Yes ✅</span>
+                  ) : (
+                    <span className="text-danger">
+                      No ❌ 
+                      <div className="mt-1">
+                        <small className="text-danger">
+                          <strong>AUTHORIZATION ERROR:</strong> The QuestionManager contract is not authorized 
+                          to call the ChainlinkAnswerVerifier. This will cause gas estimation to fail with 
+                          "Missing or invalid parameters".
+                        </small>
+                        <p className="mt-1 small">
+                          To fix this, run the setup script: <code>npm run chainlink:setup:basesepolia</code>
+                        </p>
+                      </div>
+                    </span>
+                  )}
+                </li>
+              )}
+              
+              {result.hasSourceCode !== undefined && (
+                <li>
+                  <strong>Has Source Code:</strong>{' '}
+                  {result.hasSourceCode ? (
+                    <span className="text-success">Yes ✅</span>
+                  ) : (
+                    <span className="text-danger">
+                      No ❌
+                      <div className="mt-1">
+                        <small className="text-danger">
+                          Missing source code will prevent evaluations from working correctly.
+                        </small>
+                        <p className="mt-1 small">
+                          To fix this, run: <code>npm run chainlink:update:basesepolia</code>
+                        </p>
+                      </div>
+                    </span>
+                  )}
+                </li>
+              )}
+              
+              {result.subscriptionId && (
+                <li>
+                  <strong>Subscription ID:</strong>{' '}
+                  {result.subscriptionId !== '0' ? (
+                    <span>{result.subscriptionId}</span>
+                  ) : (
+                    <span className="text-danger">
+                      Not Set (0) ❌
+                      <div className="mt-1">
+                        <small className="text-danger">
+                          A valid subscription ID is required for Chainlink Functions to work.
+                        </small>
+                        <p className="mt-1 small">
+                          To fix this, run: <code>npm run chainlink:update:basesepolia</code>
+                        </p>
+                      </div>
+                    </span>
+                  )}
+                </li>
+              )}
+              
+              {result.owner && (
+                <li>
+                  <strong>Verifier Owner:</strong> {result.owner}
+                </li>
+              )}
+            </ul>
           </div>
-        )}
-        
-        {!result.enabled && (
-          <div className="mt-2">
-            <Button 
-              variant="primary" 
-              size="sm" 
-              onClick={handleEnableChainlink}
-            >
-              Re-enable Chainlink
-            </Button>
-          </div>
-        )}
-        
-        {result.enabled && result.configured && (
-          <div className="mt-1">
-            <small>All Chainlink configuration looks good.</small>
-          </div>
-        )}
-      </div>
+          
+          {!result.configured && (
+            <Alert variant="warning" className="mt-3">
+              <Alert.Heading>Configuration Issues Detected</Alert.Heading>
+              <p>
+                Your Chainlink integration has one or more configuration issues that need to be resolved.
+              </p>
+              <p>
+                Common issues include:
+              </p>
+              <ol>
+                <li><strong>Authorization:</strong> The QuestionManager contract must be added as an authorized caller in ChainlinkAnswerVerifier.</li>
+                <li><strong>Missing Source Code:</strong> The evaluation source code must be set in the ChainlinkAnswerVerifier.</li>
+                <li><strong>Subscription ID:</strong> A valid Chainlink Functions subscription ID must be set.</li>
+                <li><strong>DON ID:</strong> The correct DON ID must be set (e.g., "fun-base-sepolia" for Base Sepolia).</li>
+              </ol>
+              <hr />
+              <p className="mb-0">
+                To fix these issues, try running:
+                <br />
+                <code>npm run chainlink:setup:basesepolia</code> - To fix authorization
+                <br />
+                <code>npm run chainlink:update:basesepolia</code> - To update source code and configuration
+              </p>
+            </Alert>
+          )}
+        </Card.Body>
+      </Card>
     );
   };
 

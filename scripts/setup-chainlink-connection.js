@@ -10,44 +10,81 @@ const CHAINLINK_VERIFIER_ADDRESS = "0x094112Bf48270b426c9bE043ee002CbBF6AB813D";
 async function main() {
   console.log("Setting up connection between QuestionManager and ChainlinkAnswerVerifier...");
   
-  // Get the signer (your account)
-  const [deployer] = await ethers.getSigners();
-  console.log(`Using account: ${deployer.address}`);
+  // Get the signer's address for logging
+  const [signer] = await ethers.getSigners();
+  console.log("Using account:", signer.address);
   
-  // Get contract instances
   console.log("Connecting to contracts...");
   
-  const ChainlinkAnswerVerifier = await ethers.getContractFactory("ChainlinkAnswerVerifier");
-  const verifier = ChainlinkAnswerVerifier.attach(CHAINLINK_VERIFIER_ADDRESS);
+  // Get deployed contract instances
+  const verifierAddress = process.env.CHAINLINKANSWERVERIFIER_ADDRESS;
+  const questionManagerAddress = process.env.QUESTIONMANAGER_ADDRESS;
   
-  const QuestionManager = await ethers.getContractFactory("QuestionManager");
-  const questionManager = QuestionManager.attach(QUESTION_MANAGER_ADDRESS);
+  if (!verifierAddress) {
+    console.error("❌ ERROR: ChainlinkAnswerVerifier address not found in environment variables");
+    console.error("Please make sure CHAINLINKANSWERVERIFIER_ADDRESS is set in your .env file");
+    process.exit(1);
+  }
   
-  // Step 1: Check if verifier already knows about QuestionManager
+  if (!questionManagerAddress) {
+    console.error("❌ ERROR: QuestionManager address not found in environment variables");
+    console.error("Please make sure QUESTIONMANAGER_ADDRESS is set in your .env file");
+    process.exit(1);
+  }
+  
+  const verifier = await ethers.getContractAt("ChainlinkAnswerVerifier", verifierAddress);
+  const questionManager = await ethers.getContractAt("QuestionManager", questionManagerAddress);
+  
+  // Verify contract ownership for troubleshooting
+  const verifierOwner = await verifier.owner();
+  const questionManagerOwner = await questionManager.owner();
+  
+  console.log("\nContract ownership information:");
+  console.log(`ChainlinkAnswerVerifier owner: ${verifierOwner}`);
+  console.log(`Your address: ${signer.address}`);
+  console.log(`Are you the verifier owner? ${verifierOwner.toLowerCase() === signer.address.toLowerCase() ? 'Yes ✅' : 'No ❌'}`);
+  console.log(`QuestionManager owner: ${questionManagerOwner}`);
+  console.log(`Are you the question manager owner? ${questionManagerOwner.toLowerCase() === signer.address.toLowerCase() ? 'Yes ✅' : 'No ❌'}`);
+  
+  if (verifierOwner.toLowerCase() !== signer.address.toLowerCase()) {
+    console.warn("\n⚠️ WARNING: You are not the owner of the ChainlinkAnswerVerifier contract.");
+    console.warn("You may not have permission to add callers if not already set up.");
+  }
+  
+  // Check if the QuestionManager is already authorized to call the verifier
   console.log("\nChecking if QuestionManager is already an authorized caller...");
-  const isAuthorized = await verifier.authorizedCallers(QUESTION_MANAGER_ADDRESS);
+  const isAuthorized = await verifier.authorizedCallers(questionManagerAddress);
   
   if (isAuthorized) {
     console.log("✅ QuestionManager is already an authorized caller in ChainlinkAnswerVerifier");
   } else {
-    console.log("❌ QuestionManager is not authorized. Adding as caller...");
+    console.log("⚠️ QuestionManager is NOT an authorized caller. Attempting to add...");
     
-    // Add QuestionManager as a caller in ChainlinkAnswerVerifier
     try {
-      const tx1 = await verifier.addCaller(QUESTION_MANAGER_ADDRESS);
-      console.log(`Transaction sent: ${tx1.hash}`);
-      await tx1.wait();
-      console.log("✅ Successfully added QuestionManager as a caller");
-    } catch (error) {
-      console.error("Error adding caller:", error.message);
-      if (error.message.includes("Ownable: caller is not the owner")) {
-        console.error("\n⚠️ You are not the owner of the ChainlinkAnswerVerifier contract!");
-        console.error(`Current account: ${deployer.address}`);
-        const owner = await verifier.owner();
-        console.error(`Contract owner: ${owner}`);
-        console.error("Please run this script with the contract owner's private key.");
+      // Add the QuestionManager as an authorized caller
+      const tx = await verifier.addCaller(questionManagerAddress);
+      await tx.wait();
+      
+      // Verify authorization after the transaction
+      const isNowAuthorized = await verifier.authorizedCallers(questionManagerAddress);
+      
+      if (isNowAuthorized) {
+        console.log("✅ Successfully added QuestionManager as an authorized caller");
+      } else {
+        console.error("❌ Failed to add QuestionManager as an authorized caller even though transaction succeeded");
+        console.error("This is unexpected behavior. Please check the contract implementation.");
       }
-      process.exit(1);
+    } catch (error) {
+      console.error("❌ ERROR: Failed to add QuestionManager as an authorized caller");
+      console.error(`Error details: ${error.message}`);
+      if (error.reason) console.error(`Reason: ${error.reason}`);
+      
+      // Check if it's an ownership issue
+      if (error.message.includes("Ownable: caller is not the owner")) {
+        console.error("\nThis error occurs because you are not the owner of the ChainlinkAnswerVerifier contract.");
+        console.error(`Current owner is: ${verifierOwner}`);
+        console.error(`Your address is: ${signer.address}`);
+      }
     }
   }
   
@@ -72,7 +109,7 @@ async function main() {
         console.error("Error setting verifier:", error.message);
         if (error.message.includes("Ownable: caller is not the owner")) {
           console.error("\n⚠️ You are not the owner of the QuestionManager contract!");
-          console.error(`Current account: ${deployer.address}`);
+          console.error(`Current account: ${signer.address}`);
           const owner = await questionManager.owner();
           console.error(`Contract owner: ${owner}`);
           console.error("Please run this script with the contract owner's private key.");
@@ -99,7 +136,7 @@ async function main() {
   // Step 3: Verify the setup is correct
   console.log("\nVerifying the connection setup...");
   try {
-    const isAuthorizedFinal = await verifier.authorizedCallers(QUESTION_MANAGER_ADDRESS);
+    const isAuthorizedFinal = await verifier.authorizedCallers(questionManagerAddress);
     const currentVerifierFinal = await questionManager.answerVerifier();
     
     if (isAuthorizedFinal && 

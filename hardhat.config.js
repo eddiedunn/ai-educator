@@ -16,20 +16,29 @@ const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 task("setup-chainlink", "Sets up the connection between QuestionManager and ChainlinkAnswerVerifier")
   .setAction(async function (taskArguments, hre) {
     // Execute the script properly with access to the Hardhat Runtime Environment
-    await hre.run('run', { script: './scripts/setup-chainlink-connection.js' });
+    await hre.run('run', { 
+      script: './scripts/setup-chainlink-connection.js',
+      network: hre.network.name 
+    });
   });
 
 task("update-chainlink", "Updates ChainlinkAnswerVerifier with source code and configuration")
   .setAction(async function (taskArguments, hre) {
     // Execute the script properly with access to the Hardhat Runtime Environment
-    await hre.run('run', { script: './scripts/update-chainlink-config.js' });
+    await hre.run('run', { 
+      script: './scripts/update-chainlink-config.js',
+      network: hre.network.name
+    });
   });
 
 task("deploy-with-chainlink", "Deploys contracts and sets up Chainlink integration")
   .setAction(async function (taskArguments, hre) {
     // Step 1: Deploy the contracts using deploy-with-chainlink.js
     console.log("Step 1: Deploying contracts with Chainlink integration...");
-    await hre.run('run', { script: './scripts/deploy-with-chainlink.js' });
+    await hre.run('run', { 
+      script: './scripts/deploy-with-chainlink.js',
+      network: hre.network.name
+    });
     
     console.log("\n✅ Full deployment with Chainlink integration complete!");
   });

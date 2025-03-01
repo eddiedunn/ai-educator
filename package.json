@@ -37,6 +37,8 @@
     "test:puzzle-points": "hardhat test test/PuzzlePoints.test.js",
     "test:question-manager": "hardhat test test/QuestionManager.test.js",
     "test:chainlink-verifier": "hardhat test test/ChainlinkAnswerVerifier.test.js",
+    "test:llm-grading": "node scripts/test-llm-grading.js",
+    "test:chainlink-source": "node scripts/chainlink-eval-source-test.js",
     "eject": "react-scripts eject",
     "chain": "hardhat node",
     "deploy": "npm run compile && hardhat run scripts/deploy-ai-educator.js --network localhost",
@@ -58,7 +60,10 @@
     "restart:chain": "node scripts/restart-app.js npm run chain",
     "restart:deploy": "node scripts/restart-app.js npm run deploy",
     "restart:deploy:full": "node scripts/restart-app.js npm run deploy:full",
-    "restart:all": "node scripts/restart-app.js \"npm run chain & sleep 5 && npm run deploy:full && npm start\""
+    "restart:all": "node scripts/restart-app.js \"npm run chain & sleep 5 && npm run deploy:full && npm start\"",
+    "test:chainlink-setup": "hardhat run scripts/test-chainlink-setup.js --network baseSepoliaTestnet",
+    "test:gas-estimate": "hardhat run scripts/test-gas-estimate.js --network baseSepoliaTestnet",
+    "chainlink:diagnose": "hardhat chainlink:diagnose --network baseSepoliaTestnet"
   },
   "author": "eddie@eddiedunn.com",
   "license": "ISC",

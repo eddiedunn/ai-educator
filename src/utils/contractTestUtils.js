@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import ChainlinkAnswerVerifierArtifact from '../abis/contracts/ChainlinkAnswerVerifier.sol/ChainlinkAnswerVerifier.json';
+import QuestionManagerArtifact from '../abis/contracts/QuestionManager.sol/QuestionManager.json';
 
 /**
  * A collection of utility functions for testing and debugging contract interactions
@@ -116,127 +117,141 @@ export async function checkPreviousAssessment(questionManager, questionSetId) {
  */
 export async function checkVerifierSetup(questionManager, provider) {
   try {
-    console.log("[TEST] Checking Chainlink verifier setup");
+    console.log("Checking Chainlink verifier setup...");
     
-    // Check if Chainlink is enabled
-    const useChainlink = await questionManager.useChainlinkFunctions();
-    console.log(`Chainlink functions enabled: ${useChainlink}`);
-    
-    if (!useChainlink) {
-      console.log("Chainlink functions are disabled, so verification will be skipped.");
-      return { enabled: false };
-    }
-    
-    // Get verifier address
+    // Get the verifier address from the QuestionManager
     const verifierAddress = await questionManager.answerVerifier();
-    console.log(`Verifier address: ${verifierAddress}`);
+    console.log(`Verifier address from QuestionManager: ${verifierAddress}`);
     
-    if (verifierAddress === ethers.constants.AddressZero) {
-      console.log("Verifier not set up in QuestionManager!");
-      return { 
-        enabled: useChainlink,
+    // Check if verifier address is valid
+    if (verifierAddress === '0x0000000000000000000000000000000000000000') {
+      console.error("❌ ERROR: Verifier address is not set in QuestionManager");
+      return {
         configured: false,
-        reason: "Verifier address not set" 
+        chainlinkEnabled: false,
+        status: "Chainlink is enabled but not configured",
+        message: "The verifier address is not set in the QuestionManager contract"
       };
     }
     
-    // Connect to verifier contract
-    const signer = questionManager.signer;
+    // Get the QuestionManager address for authorization checks
+    const questionManagerAddress = questionManager.address;
+    console.log(`QuestionManager address: ${questionManagerAddress}`);
+    
+    // Check if there's actually a contract at the verifier address
+    const code = await provider.getCode(verifierAddress);
+    if (code === '0x' || code === '0x0') {
+      console.error(`❌ ERROR: No contract found at verifier address: ${verifierAddress}`);
+      return {
+        configured: false,
+        chainlinkEnabled: true,
+        status: "Chainlink is enabled but not configured",
+        message: "No contract found at the verifier address"
+      };
+    }
+    
+    console.log("✅ Contract exists at verifier address");
+    
+    // Create a verifier contract instance
     const verifier = new ethers.Contract(
       verifierAddress,
       ChainlinkAnswerVerifierArtifact.abi,
-      signer
+      provider
     );
     
-    // Check if contract exists
-    const code = await provider.getCode(verifierAddress);
-    if (code === '0x') {
-      console.error("No contract found at verifier address!");
-      return { 
-        enabled: useChainlink,
+    // Check if QuestionManager is authorized
+    try {
+      const isAuthorized = await verifier.authorizedCallers(questionManagerAddress);
+      console.log(`Authorization status: ${isAuthorized ? "✅ Authorized" : "❌ NOT Authorized"}`);
+      
+      if (!isAuthorized) {
+        console.error("❌ ERROR: QuestionManager is not an authorized caller in the ChainlinkAnswerVerifier");
+        console.error("This will cause transactions to revert with 'Caller not authorized'");
+        console.error("Run the setup-chainlink-connection.js script to fix this issue");
+        return {
+          configured: false,
+          chainlinkEnabled: true,
+          status: "Chainlink is enabled but not properly configured",
+          message: "QuestionManager is not authorized to call the verifier"
+        };
+      }
+    } catch (error) {
+      console.error("❌ ERROR checking authorization status:", error.message);
+      return {
         configured: false,
-        reason: "No contract at verifier address" 
+        chainlinkEnabled: true,
+        status: "Chainlink is enabled but authorization check failed",
+        message: `Error checking authorization: ${error.message}`
       };
     }
     
-    // Check source code
-    let sourceCode = '';
+    // Check if source code is set
+    let sourceCode;
     try {
       sourceCode = await verifier.evaluationSource();
-      console.log(`Has source code: ${sourceCode.length > 0}`);
-      if (sourceCode.length === 0) {
-        console.error("Evaluation source code not set!");
+      console.log(`Source code present: ${sourceCode && sourceCode.length > 0 ? "✅ Yes" : "❌ No"}`);
+      if (sourceCode && sourceCode.length > 0) {
+        console.log(`Source code length: ${sourceCode.length} characters`);
+      } else {
+        console.error("❌ ERROR: Evaluation source code is not set or empty");
+        return {
+          configured: false,
+          chainlinkEnabled: true,
+          status: "Chainlink is enabled but source code is not set",
+          message: "Evaluation source code is not configured"
+        };
       }
     } catch (error) {
-      console.error("Error checking source code:", error.message);
-      return { 
-        enabled: useChainlink,
+      console.error("❌ ERROR accessing source code:", error.message);
+      return {
         configured: false,
-        reason: "Error accessing source code" 
+        chainlinkEnabled: true,
+        status: "Chainlink is enabled but source code check failed",
+        message: `Error accessing source code: ${error.message}`
       };
     }
     
-    // Check subscription ID
-    let subId = 0;
+    // Check DON ID and Subscription ID
     try {
-      subId = await verifier.subscriptionId();
-      console.log(`Subscription ID: ${subId.toString()}`);
-      if (subId.toString() === '0') {
-        console.error("Subscription ID not set!");
+      const donId = await verifier.donId();
+      const subscriptionId = await verifier.subscriptionId();
+      console.log(`DON ID: ${ethers.utils.parseBytes32String(donId)}`);
+      console.log(`Subscription ID: ${subscriptionId.toString()}`);
+      
+      if (subscriptionId.toString() === '0') {
+        console.error("❌ ERROR: Subscription ID is not set (value is 0)");
+        return {
+          configured: false,
+          chainlinkEnabled: true,
+          status: "Chainlink is enabled but subscription ID is not set",
+          message: "Subscription ID is not configured"
+        };
       }
     } catch (error) {
-      console.error("Error checking subscription ID:", error.message);
-      return { 
-        enabled: useChainlink,
+      console.error("❌ ERROR accessing configuration:", error.message);
+      return {
         configured: false,
-        reason: "Error accessing subscription ID" 
+        chainlinkEnabled: true,
+        status: "Chainlink is enabled but configuration check failed",
+        message: `Error accessing configuration: ${error.message}`
       };
     }
     
-    // Check if QuestionManager is authorized
-    let isAuthorized = false;
-    try {
-      isAuthorized = await verifier.authorizedCallers(questionManager.address);
-      console.log(`QuestionManager authorized: ${isAuthorized}`);
-      if (!isAuthorized) {
-        console.error("QuestionManager is not authorized to call the verifier!");
-      }
-    } catch (error) {
-      console.error("Error checking authorization:", error.message);
-      return { 
-        enabled: useChainlink,
-        configured: false,
-        reason: "Error checking authorization" 
-      };
-    }
-    
-    // Check owner
-    let owner;
-    try {
-      owner = await verifier.owner();
-      console.log(`Verifier owner: ${owner}`);
-      const currentUser = await signer.getAddress();
-      console.log(`Current user: ${currentUser}`);
-      console.log(`Is current user the owner: ${owner.toLowerCase() === currentUser.toLowerCase()}`);
-    } catch (error) {
-      console.error("Error checking verifier owner:", error.message);
-    }
-    
+    // All checks passed
+    console.log("✅ Chainlink verifier is properly configured");
     return {
-      enabled: useChainlink,
-      configured: sourceCode.length > 0 && subId.toString() !== '0' && isAuthorized,
-      address: verifierAddress,
-      hasSourceCode: sourceCode.length > 0,
-      subscriptionId: subId.toString(),
-      isAuthorized,
-      owner
+      configured: true,
+      chainlinkEnabled: true,
+      status: "Chainlink is enabled and properly configured",
+      message: "Verifier is properly set up and ready to use"
     };
   } catch (error) {
-    console.error("Error checking verifier setup:", error);
+    console.error("❌ ERROR in verifier setup check:", error.message);
     return {
-      error: error.message,
-      enabled: false,
-      configured: false
+      configured: false,
+      chainlinkEnabled: false,
+      status: "Error checking Chainlink configuration",
+      message: `Unexpected error: ${error.message}`
     };
   }
 }
@@ -363,92 +378,156 @@ export async function restartAssessment(questionManager, questionSetId) {
  * @returns {Promise<Object>} - Submission result
  */
 export async function submitWithGasEstimate(questionManager, questionSetId, answersHash) {
+  console.log("Testing submission with gas estimation...");
+  console.log(`Question Set ID: ${questionSetId}`);
+  console.log(`Answers Hash: ${answersHash}`);
+  
   try {
-    console.log("[TEST] Submitting assessment with gas estimation");
-    console.log(`Question Set ID: ${questionSetId}`);
-    console.log(`Answers Hash: ${answersHash}`);
+    // First, get more information about our contracts
+    const verifierAddress = await questionManager.answerVerifier();
+    console.log(`Verifier address from QuestionManager: ${verifierAddress}`);
     
-    // Log the signer address
-    const signer = await questionManager.signer.getAddress();
-    console.log(`Submitting as: ${signer}`);
+    // Check if the verifier address is set
+    if (verifierAddress === '0x0000000000000000000000000000000000000000') {
+      console.error("❌ ERROR: No verifier address set in QuestionManager");
+      return {
+        success: false,
+        error: "No verifier address set in QuestionManager",
+        details: "The answerVerifier address in QuestionManager is set to the zero address. Run the setup-chainlink-connection.js script."
+      };
+    }
     
-    // Estimate gas for the transaction
-    console.log("Estimating gas...");
-    let gasEstimate;
+    // Create verifier instance
+    const provider = questionManager.provider;
+    const verifier = new ethers.Contract(
+      verifierAddress,
+      ChainlinkAnswerVerifierArtifact.abi,
+      provider
+    );
+    
+    // Check if QuestionManager is authorized
+    const questionManagerAddress = questionManager.address;
+    const isAuthorized = await verifier.authorizedCallers(questionManagerAddress);
+    console.log(`QuestionManager authorized in verifier: ${isAuthorized ? 'Yes ✅' : 'No ❌'}`);
+    
+    if (!isAuthorized) {
+      console.error("❌ ERROR: QuestionManager is not authorized to call the verifier");
+      return {
+        success: false,
+        error: "Authorization error",
+        details: "The QuestionManager contract is not authorized to call the ChainlinkAnswerVerifier. This will cause the transaction to revert with 'Caller not authorized'. Run the setup-chainlink-connection.js script to fix this."
+      };
+    }
+    
+    // Check if subscription ID is set
+    const subscriptionId = await verifier.subscriptionId();
+    console.log(`Subscription ID: ${subscriptionId.toString()}`);
+    
+    if (subscriptionId.toString() === '0') {
+      console.error("❌ ERROR: Subscription ID is not set (value is 0)");
+      return {
+        success: false,
+        error: "Missing subscription ID",
+        details: "The subscription ID in the ChainlinkAnswerVerifier is set to 0. Configure the subscription ID using the Chainlink Setup panel or run update-chainlink-config.js."
+      };
+    }
+    
+    // Check if source code is set
     try {
-      gasEstimate = await questionManager.estimateGas.submitAssessmentAnswers(
-        questionSetId,
+      const sourceCode = await verifier.evaluationSource();
+      console.log(`Source code length: ${sourceCode.length} characters`);
+      
+      if (!sourceCode || sourceCode.length === 0) {
+        console.error("❌ ERROR: Evaluation source code is not set");
+        return {
+          success: false,
+          error: "Missing source code",
+          details: "The evaluation source code in the ChainlinkAnswerVerifier is empty. Configure the source code using the Chainlink Setup panel or run update-chainlink-config.js."
+        };
+      }
+    } catch (error) {
+      console.error(`❌ ERROR accessing source code: ${error.message}`);
+      return {
+        success: false,
+        error: `Error accessing source code: ${error.message}`,
+        details: "There was an error accessing the source code in the ChainlinkAnswerVerifier. This might indicate a contract interface mismatch."
+      };
+    }
+    
+    // Now, try to estimate gas for the submit assessment function
+    console.log("Attempting to estimate gas for submitAssessment...");
+    try {
+      // Get question set content hash
+      const questionSetContentHash = await questionManager.questionSetContentHashes(questionSetId);
+      console.log(`Question set content hash: ${questionSetContentHash}`);
+      
+      // Check if the assessment exists and if it's already being verified
+      const assessment = await questionManager.assessments(questionSetId);
+      console.log("Assessment status:", {
+        user: assessment.user,
+        score: assessment.score.toString(),
+        status: assessment.status.toString(),
+        timestamp: assessment.timestamp.toString()
+      });
+      
+      // If the assessment is already being verified, we can't submit again
+      if (assessment.status.toString() === '1') { // 1 = Verifying
+        console.error("❌ ERROR: Assessment is already in 'Verifying' state");
+        return {
+          success: false,
+          error: "Assessment already being verified",
+          details: "The assessment is already in the 'Verifying' state. Wait for the verification to complete or restart the assessment."
+        };
+      }
+      
+      // Estimate gas
+      const gasEstimate = await questionManager.estimateGas.submitAssessment(
+        questionSetId, 
         answersHash
       );
-      console.log(`Estimated gas: ${gasEstimate.toString()}`);
+      
+      console.log(`✅ Gas estimation successful: ${gasEstimate.toString()} gas units`);
+      
+      return {
+        success: true,
+        gasEstimate: gasEstimate.toString()
+      };
     } catch (error) {
-      console.error("Gas estimation failed:", error.message);
-      if (error.reason) {
-        console.error("Revert reason:", error.reason);
-      }
+      console.error("❌ ERROR during gas estimation:", error.message);
       
-      // Try to extract error data
-      if (error.data) {
-        console.error("Error data:", error.data);
-      }
-      
-      // Check for "Source code not set" error which indicates Chainlink configuration issues
-      if (error.message && error.message.includes("Source code not set")) {
-        console.error("\n==============================================");
-        console.error("DETECTED CHAINLINK CONFIGURATION ISSUE!");
-        console.error("The Chainlink verifier's source code is not set.");
-        console.error("==============================================");
-        console.error("RECOMMENDED ACTION: Use submitWithChainlinkBypass() function instead");
-        console.error("Example: await submitWithChainlinkBypass(questionManager, provider, questionSetId, answersHash)");
-        console.error("==============================================\n");
+      // Special error handling for specific error messages
+      if (error.message.includes("Caller not authorized")) {
+        return {
+          success: false,
+          error: "Authorization error",
+          details: "The QuestionManager contract is not authorized to call the ChainlinkAnswerVerifier. Run the setup-chainlink-connection.js script to fix this."
+        };
+      } else if (error.message.includes("insufficient funds")) {
+        return {
+          success: false,
+          error: "Insufficient funds",
+          details: "Your wallet doesn't have enough ETH to cover gas costs for this transaction."
+        };
+      } else if (error.message.includes("execution reverted")) {
+        return {
+          success: false,
+          error: "Execution reverted",
+          details: error.message
+        };
       }
       
       return {
         success: false,
         error: error.message,
-        stage: "gas estimation"
+        details: "Failed to estimate gas. This often happens when the transaction would revert. Check the authorization, subscription ID, and source code configuration."
       };
     }
-    
-    // Add 30% buffer to the gas estimate for safety
-    const gasWithBuffer = gasEstimate.mul(130).div(100);
-    console.log(`Gas with 30% buffer: ${gasWithBuffer.toString()}`);
-    
-    // Submit the transaction with explicit gas limit
-    console.log("Submitting transaction...");
-    const tx = await questionManager.submitAssessmentAnswers(
-      questionSetId,
-      answersHash,
-      { gasLimit: gasWithBuffer }
-    );
-    
-    console.log("Transaction submitted:", tx.hash);
-    console.log("Waiting for confirmation...");
-    
-    const receipt = await tx.wait();
-    console.log("Transaction confirmed!");
-    console.log("Gas used:", receipt.gasUsed.toString());
-    console.log("Block number:", receipt.blockNumber);
-    
-    return {
-      success: true,
-      transactionHash: tx.hash,
-      gasUsed: receipt.gasUsed.toString(),
-      blockNumber: receipt.blockNumber
-    };
   } catch (error) {
-    console.error("Error during submission:", error);
-    
-    // Check if error contains revert reason
-    if (error.reason) {
-      console.error("Revert reason:", error.reason);
-    }
-    
+    console.error("❌ ERROR in submitWithGasEstimate:", error.message);
     return {
       success: false,
       error: error.message,
-      reason: error.reason || "Unknown error",
-      stage: "transaction"
+      details: "An unexpected error occurred while testing the submission."
     };
   }
 }
@@ -706,4 +785,179 @@ export async function quickPreSubmissionCheck(questionManager, questionSetId) {
     console.error("Error during quick check:", error);
     return false;
   }
+}
+
+export async function testChainlinkSetup(signer, contractAddresses) {
+  console.log("🔍 Testing Chainlink Functions setup...");
+  const results = {
+    success: false,
+    tests: {},
+    errors: []
+  };
+  
+  try {
+    // Get contract addresses
+    const questionManagerAddress = contractAddresses.questionManager;
+    const verifierAddress = contractAddresses.chainlinkVerifier;
+    
+    console.log(`📋 Contract Addresses:`);
+    console.log(`   - QuestionManager: ${questionManagerAddress}`);
+    console.log(`   - ChainlinkAnswerVerifier: ${verifierAddress}`);
+    
+    // Check if contracts exist
+    if (!questionManagerAddress || questionManagerAddress === '0x0000000000000000000000000000000000000000') {
+      throw new Error("QuestionManager address is not valid");
+    }
+    
+    if (!verifierAddress || verifierAddress === '0x0000000000000000000000000000000000000000') {
+      throw new Error("ChainlinkAnswerVerifier address is not valid");
+    }
+    
+    // Create contract instances
+    const questionManager = new ethers.Contract(
+      questionManagerAddress,
+      QuestionManagerArtifact.abi,
+      signer
+    );
+    
+    const verifier = new ethers.Contract(
+      verifierAddress,
+      ChainlinkAnswerVerifierArtifact.abi,
+      signer
+    );
+    
+    // Test 1: Check contract ownership
+    console.log("🔑 Checking contract ownership...");
+    const signerAddress = await signer.getAddress();
+    const verifierOwner = await verifier.owner();
+    
+    results.tests.ownershipCheck = {
+      signerAddress,
+      verifierOwner,
+      isOwner: verifierOwner.toLowerCase() === signerAddress.toLowerCase()
+    };
+    
+    console.log(`   - Your address: ${signerAddress}`);
+    console.log(`   - Verifier owner: ${verifierOwner}`);
+    console.log(`   - You are ${results.tests.ownershipCheck.isOwner ? '✅' : '❌'} the owner of the verifier`);
+    
+    if (!results.tests.ownershipCheck.isOwner) {
+      results.errors.push("You are not the owner of the ChainlinkAnswerVerifier contract");
+    }
+    
+    // Test 2: Check if the QuestionManager has the correct verifier set
+    console.log("🔄 Checking QuestionManager configuration...");
+    const configuredVerifier = await questionManager.answerVerifier();
+    
+    results.tests.verifierConfig = {
+      expectedVerifier: verifierAddress,
+      actualVerifier: configuredVerifier,
+      isCorrect: configuredVerifier.toLowerCase() === verifierAddress.toLowerCase()
+    };
+    
+    console.log(`   - Expected verifier: ${verifierAddress}`);
+    console.log(`   - Actual verifier: ${configuredVerifier}`);
+    console.log(`   - Verifier configuration is ${results.tests.verifierConfig.isCorrect ? '✅' : '❌'} correct`);
+    
+    if (!results.tests.verifierConfig.isCorrect) {
+      results.errors.push("QuestionManager has incorrect verifier address configured");
+    }
+    
+    // Test 3: Check authorization status
+    console.log("🔐 Checking authorization status...");
+    const isAuthorized = await verifier.authorizedCallers(questionManagerAddress);
+    
+    results.tests.authorization = {
+      isAuthorized
+    };
+    
+    console.log(`   - QuestionManager is ${isAuthorized ? '✅' : '❌'} authorized to call the verifier`);
+    
+    if (!isAuthorized) {
+      results.errors.push("QuestionManager is not authorized to call the ChainlinkAnswerVerifier");
+    }
+    
+    // Test 4: Check Chainlink configuration
+    console.log("⚙️ Checking Chainlink configuration...");
+    const donId = await verifier.donId();
+    const subscriptionId = await verifier.subscriptionId();
+    let sourceCode;
+    
+    try {
+      sourceCode = await verifier.evaluationSource();
+      
+      results.tests.chainlinkConfig = {
+        donId,
+        subscriptionId: subscriptionId.toString(),
+        hasSourceCode: sourceCode && sourceCode.length > 0,
+        sourceCodeLength: sourceCode ? sourceCode.length : 0
+      };
+      
+      console.log(`   - DON ID: ${donId}`);
+      console.log(`   - Subscription ID: ${subscriptionId.toString()}`);
+      console.log(`   - Source code: ${sourceCode && sourceCode.length > 0 ? '✅' : '❌'} (${sourceCode ? sourceCode.length : 0} characters)`);
+      
+      if (!sourceCode || sourceCode.length === 0) {
+        results.errors.push("No evaluation source code is set");
+      }
+      
+      if (subscriptionId.toString() === '0') {
+        results.errors.push("Subscription ID is not set (value is 0)");
+      }
+    } catch (error) {
+      console.error(`   - ❌ Error accessing source code: ${error.message}`);
+      results.tests.chainlinkConfig = {
+        donId,
+        subscriptionId: subscriptionId.toString(),
+        hasSourceCode: false,
+        sourceCodeError: error.message
+      };
+      
+      results.errors.push(`Error accessing source code: ${error.message}`);
+    }
+    
+    // Test 5: Check if verifier is a consumer in the Chainlink subscription
+    console.log("🔗 Note: Cannot automatically check if verifier is added as a consumer in your Chainlink subscription");
+    console.log("   - You need to verify this manually in the Chainlink Functions UI");
+    
+    // Final result
+    results.success = results.errors.length === 0;
+    
+    console.log("\n📊 Test Summary:");
+    if (results.success) {
+      console.log("✅ All tests passed! Chainlink setup is correct.");
+    } else {
+      console.log("❌ Some tests failed. Please fix the following issues:");
+      results.errors.forEach((error, index) => {
+        console.log(`   ${index + 1}. ${error}`);
+      });
+      
+      console.log("\n🔧 Suggested fixes:");
+      if (!results.tests.ownershipCheck?.isOwner) {
+        console.log(`   - Use the wallet that owns the contracts (${results.tests.ownershipCheck?.verifierOwner}) to run the setup`);
+      }
+      
+      if (!results.tests.verifierConfig?.isCorrect) {
+        console.log(`   - Run 'npx hardhat setup-chainlink --network baseSepoliaTestnet' to configure the correct verifier address`);
+      }
+      
+      if (!results.tests.authorization?.isAuthorized) {
+        console.log(`   - Run 'npx hardhat setup-chainlink-connection --network baseSepoliaTestnet' to authorize the QuestionManager`);
+      }
+      
+      if (!results.tests.chainlinkConfig?.hasSourceCode) {
+        console.log(`   - Run 'npx hardhat update-chainlink --network baseSepoliaTestnet' to set the evaluation source code`);
+      }
+      
+      if (results.tests.chainlinkConfig?.subscriptionId === '0') {
+        console.log(`   - Run 'npx hardhat update-chainlink --network baseSepoliaTestnet' to set the subscription ID`);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ ERROR in testChainlinkSetup: ${error.message}`);
+    results.success = false;
+    results.errors.push(error.message);
+  }
+  
+  return results;
 } 
