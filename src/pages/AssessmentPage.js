@@ -7,6 +7,8 @@ import { evaluateWithOpenAI } from '../utils/llmEvaluator';
 import { Link } from 'react-router-dom';
 import { metaMaskHooks } from '../utils/connectors';
 import { activateInjectedConnector } from '../utils/connectors';
+import { quickPreSubmissionCheck, submitWithGasEstimate } from '../utils/contractTestUtils';
+import DiagnosticPanel from '../components/DiagnosticPanel';
 
 const { useAccounts } = metaMaskHooks;
 
@@ -21,6 +23,7 @@ const AssessmentPage = ({ questionManager }) => {
   const [assessmentComplete, setAssessmentComplete] = useState(false);
   const [message, setMessage] = useState(null);
   const [questionSetData, setQuestionSetData] = useState(null);
+  const [submitError, setSubmitError] = useState(null);
   
   // Use metaMask hooks
   const accounts = useAccounts();
@@ -101,12 +104,34 @@ const AssessmentPage = ({ questionManager }) => {
   };
 
   const handleSubmitAssessment = async () => {
+    // Reset error states
+    setError(null);
+    setSubmitError(null);
+    setMessage(null);
+    setSubmitting(true);
+    
+    console.log("Submitting assessment using account:", account);
+    console.log("Question Manager address:", questionManager?.address);
+    
     try {
-      setSubmitting(true);
-      
-      // Log the currently connected account for debugging
-      console.log("SUBMITTING ASSESSMENT WITH ACCOUNT:", await questionManager.signer.getAddress());
-      console.log("QUESTION MANAGER ADDRESS:", questionManager.address);
+      // Confirm there is a valid blockchain connection
+      if (!account || !questionManager) {
+        await activateInjectedConnector();
+        
+        if (!account) {
+          setError("Please connect your wallet to submit answers");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      // Perform basic pre-submission checks
+      const readyToSubmit = await quickPreSubmissionCheck(questionManager, id);
+      if (!readyToSubmit) {
+        setSubmitError("Pre-submission check failed. See console for details.");
+        setSubmitting(false);
+        return;
+      }
       
       // Check if all questions have been answered
       const unansweredQuestions = questions.filter(q => 
@@ -118,31 +143,41 @@ const AssessmentPage = ({ questionManager }) => {
         setSubmitting(false);
         return;
       }
-
-      // Format answers into an array for submission
-      const answerArray = questions.map((q) => ({
-        questionId: q.id,
-        answer: answers[q.id] || ''
-      }));
       
-      debugLog("Submitting free-text answers:", answerArray);
-      debugLog(`Total questions: ${questions.length}, answers submitted: ${answerArray.length}`);
-
-      // First store the answers to get a hash
+      debugLog('Preparing to store answers...');
+      
       try {
+        // Generate hash and store answers
+        // Format answers into an array for submission
+        const answerArray = questions.map((q) => ({
+          questionId: q.id,
+          answer: answers[q.id] || ''
+        }));
+        
+        debugLog("Submitting free-text answers:", answerArray);
+        debugLog(`Total questions: ${questions.length}, answers submitted: ${answerArray.length}`);
+        
         // Store answers and get the hash
         const { answersHash } = await storeAnswers(id, answerArray);
-        debugLog("Generated answers hash:", answersHash);
+        debugLog(`Generated answers hash: ${answersHash}`);
         
-        // Submit answer hash to the blockchain
-        await submitAnswersToBlockchain(questionManager, id, answersHash);
-        debugLog("Answers submitted successfully");
+        // Use our enhanced submission function with gas estimation
+        const result = await submitWithGasEstimate(
+          questionManager,
+          id,
+          answersHash
+        );
         
-        setAssessmentComplete(true);
-        setMessage({
-          type: 'success',
-          text: 'Your answers have been submitted successfully and are being evaluated. Results will be available soon!'
-        });
+        if (result.success) {
+          setAssessmentComplete(true);
+          setMessage({
+            type: 'success',
+            text: 'Your answers have been submitted successfully and are being evaluated. Results will be available soon!'
+          });
+        } else {
+          setSubmitError(`Submission failed: ${result.reason || 'Unknown error'}`);
+          console.error("Detailed error:", result);
+        }
       } catch (error) {
         console.error("Error submitting to blockchain:", error);
         
@@ -157,6 +192,15 @@ const AssessmentPage = ({ questionManager }) => {
           setMessage({
             type: 'warning',
             text: 'You have already completed this assessment. Please choose a different question set.'
+          });
+        } else if (error.message.includes('Source code not set')) {
+          // Chainlink source code issue
+          setSubmitError(
+            `Chainlink verifier error: The source code for verification is not set. This is a contract configuration issue.`
+          );
+          setMessage({
+            type: 'info',
+            text: `We've detected a Chainlink configuration issue. Please expand the Submission Diagnostics panel below and use the "Submit with Chainlink Bypass" option to bypass Chainlink verification for testing purposes.`
           });
         } else if (error.message.includes('nonce') || error.message.includes('transaction') || error.message.includes('sync')) {
           // Handle nonce errors with more detailed guidance
@@ -176,17 +220,13 @@ const AssessmentPage = ({ questionManager }) => {
           }
         } else {
           // General error
-          setMessage({
-            type: 'error',
-            text: `Error submitting answers: ${error.message}`
-          });
+          setSubmitError(`Error submitting answers: ${error.message}`);
         }
       }
-      
-      setSubmitting(false);
     } catch (error) {
       console.error("Error submitting assessment:", error);
-      setError(`Failed to submit assessment: ${error.message}`);
+      setSubmitError(`Error: ${error.message}`);
+    } finally {
       setSubmitting(false);
     }
   };
@@ -362,6 +402,21 @@ const AssessmentPage = ({ questionManager }) => {
                 </div>
               </Card.Body>
             </Card>
+          )}
+
+          {/* Add diagnostic panel */}
+          {questionManager && id && (
+            <DiagnosticPanel questionSetId={id} questionManager={questionManager} />
+          )}
+
+
+          {/* Display submit error message from diagnostics */}
+          {submitError && (
+            <div className="alert alert-danger mt-4">
+              <h5>Submission Error:</h5>
+              <p>{submitError}</p>
+              <p className="mb-0">Check the console for detailed diagnostic information.</p>
+            </div>
           )}
         </div>
       )}
