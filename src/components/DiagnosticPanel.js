@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Button, Accordion, Badge } from 'react-bootstrap';
+import { Card, Button, Accordion, Badge, Spinner } from 'react-bootstrap';
 import { ethers } from 'ethers';
 import {
   checkQuestionSet,
@@ -357,33 +357,46 @@ const DiagnosticPanel = ({ questionSetId, questionManager }) => {
             </div>
           )}
           
-          {/* Always show Chainlink Bypass option after diagnostics are run */}
+          {/* Always show the direct "Submit with Chainlink Bypass" button once diagnostics have been run */}
           {results.verifier && (
-            <div className="mt-3 alert alert-info">
-              <strong>Alternative Submission Method</strong>
-              <p>If your regular submission is failing, you can try bypassing Chainlink verification:</p>
-              <Button 
-                variant="warning" 
-                onClick={handleBypassChainlinkSubmit}
-                disabled={bypassStatus && bypassStatus.isSubmitting}
-                className="mt-2"
-              >
-                {bypassStatus && bypassStatus.isSubmitting ? 'Processing...' : 'Submit with Chainlink Bypass'}
-              </Button>
-              <div className="mt-1">
-                <small>This will temporarily disable Chainlink verification to allow your submission to go through. 
-                Only works if you're the contract owner or admin.</small>
+            <div className="mt-3 mb-4 p-3" style={{ border: '2px solid #ece16a', borderRadius: '8px', backgroundColor: '#fffeed' }}>
+              <h5 className="text-center mb-3">💡 Fast-Track Submission</h5>
+              <p>
+                <strong>Having trouble with submission?</strong> You can use this button to bypass Chainlink verification 
+                and submit directly to the blockchain. This is useful when:
+              </p>
+              <ul>
+                <li>Your submission is failing with "Source code not set" errors</li>
+                <li>You need to quickly submit for your hackathon demo</li>
+                <li>The Chainlink verifier is misconfigured or not properly set up</li>
+              </ul>
+              <div className="d-grid">
+                <Button 
+                  variant="warning" 
+                  size="lg"
+                  onClick={handleBypassChainlinkSubmit}
+                  disabled={bypassStatus && bypassStatus.isSubmitting}
+                  className="mt-2"
+                  style={{ fontSize: '1.1rem' }}
+                >
+                  {bypassStatus && bypassStatus.isSubmitting ? 
+                    <><Spinner animation="border" size="sm" className="me-2" />Processing...</> : 
+                    '🚀 Submit with Chainlink Bypass'}
+                </Button>
+              </div>
+              <div className="text-center mt-2">
+                <small className="text-muted">Note: This works best if you're the contract owner or admin</small>
               </div>
             </div>
           )}
           
-          {/* Show specific warning if Chainlink verification issue is detected */}
+          {/* If there's a specific verification issue, show additional context */}
           {results.verifier && results.verifier.enabled && !results.verifier.configured && (
             <div className="mt-3 alert alert-warning">
-              <strong>Chainlink Verification Issue Detected</strong>
-              <p>Your submission may be failing because the Chainlink verifier is not properly configured.</p>
-              {results.verifier.reason && <p><strong>Reason:</strong> {results.verifier.reason}</p>}
-              <p>We recommend using the bypass option above.</p>
+              <strong>📢 Chainlink Verification Issue Detected</strong>
+              <p>Your submission is likely failing because the Chainlink verifier is not properly configured.</p>
+              {results.verifier.reason && <p><strong>Specific reason:</strong> {results.verifier.reason}</p>}
+              <p>We recommend using the "Submit with Chainlink Bypass" button above.</p>
             </div>
           )}
           

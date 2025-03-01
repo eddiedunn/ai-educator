@@ -2,12 +2,37 @@ require("@nomicfoundation/hardhat-toolbox");
 require("@nomicfoundation/hardhat-chai-matchers");
 require('dotenv').config();
 
+// Import the task function from Hardhat
+const { task } = require("hardhat/config");
+
 // Get environment variables or use defaults
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "https://sepolia.infura.io/v3/your-api-key";
 const BASE_SEPOLIA_RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
+
+// Add tasks for Chainlink setup
+task("setup-chainlink", "Sets up the connection between QuestionManager and ChainlinkAnswerVerifier")
+  .setAction(async function (taskArguments, hre) {
+    // Execute the script properly with access to the Hardhat Runtime Environment
+    await hre.run('run', { script: './scripts/setup-chainlink-connection.js' });
+  });
+
+task("update-chainlink", "Updates ChainlinkAnswerVerifier with source code and configuration")
+  .setAction(async function (taskArguments, hre) {
+    // Execute the script properly with access to the Hardhat Runtime Environment
+    await hre.run('run', { script: './scripts/update-chainlink-config.js' });
+  });
+
+task("deploy-with-chainlink", "Deploys contracts and sets up Chainlink integration")
+  .setAction(async function (taskArguments, hre) {
+    // Step 1: Deploy the contracts using deploy-with-chainlink.js
+    console.log("Step 1: Deploying contracts with Chainlink integration...");
+    await hre.run('run', { script: './scripts/deploy-with-chainlink.js' });
+    
+    console.log("\n✅ Full deployment with Chainlink integration complete!");
+  });
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {

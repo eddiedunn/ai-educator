@@ -58,6 +58,15 @@ This will stop any running processes and start the entire application stack (Har
 - `npm run chain` - Starts a local Hardhat blockchain
 - `npm run deploy` - Deploys contracts to the local Hardhat network
 - `npm run deploy:testnet` - Deploys contracts to the Sepolia testnet
+- `npm run deploy:basesepolia` - Deploys contracts to the Base Sepolia testnet
+- `npm run deploy:with-chainlink` - Deploys contracts with Chainlink Functions integration locally
+- `npm run deploy:with-chainlink:basesepolia` - Deploys contracts with Chainlink Functions integration to Base Sepolia
+- `npm run chainlink:setup` - Sets up the connection between QuestionManager and ChainlinkAnswerVerifier locally
+- `npm run chainlink:setup:basesepolia` - Sets up the connection between contracts on Base Sepolia
+- `npm run chainlink:update` - Updates ChainlinkAnswerVerifier with source code and configuration locally
+- `npm run chainlink:update:basesepolia` - Updates ChainlinkAnswerVerifier on Base Sepolia
+- `npm run deploy:full:with-chainlink` - Deploys and sets up everything including Chainlink Functions locally
+- `npm run deploy:full:with-chainlink:basesepolia` - Deploys and sets up everything including Chainlink Functions on Base Sepolia
 - `npm run verify` - Verifies contract source code on Etherscan (Sepolia)
 - `npm run update-frontend` - Updates frontend code with deployed contract addresses
 - `npm run deploy:full` - Deploys contracts and updates frontend in one command
@@ -249,4 +258,43 @@ The storage service (`src/utils/storageService.js`) provides a consistent interf
 - Retrieval by ID or content hash
 
 This abstraction ensures that your application code doesn't need to change when switching between development and production storage methods.
+
+## Chainlink Functions Integration
+
+This project includes integration with Chainlink Functions for decentralized answer verification. For detailed instructions on setting up and using Chainlink Functions with this project, please refer to the dedicated documentation:
+
+### [Chainlink Functions Setup Guide](README-CHAINLINK.md)
+
+### Chainlink Integration Scripts
+
+The following scripts are available for Chainlink Functions integration:
+
+- `npm run deploy:with-chainlink:basesepolia` - Deploys all contracts to Base Sepolia with Chainlink Functions integration
+- `npm run chainlink:setup:basesepolia` - Sets up the connection between QuestionManager and ChainlinkAnswerVerifier
+- `npm run chainlink:update:basesepolia` - Updates the ChainlinkAnswerVerifier with source code and configuration
+
+You can also run these tasks directly through Hardhat:
+
+```bash
+# Setup the connection between QuestionManager and ChainlinkAnswerVerifier
+npx hardhat setup-chainlink --network baseSepoliaTestnet
+
+# Update ChainlinkAnswerVerifier with source code and configuration
+npx hardhat update-chainlink --network baseSepoliaTestnet
+
+# Deploy contracts and set up Chainlink integration in one command
+npx hardhat deploy-with-chainlink --network baseSepoliaTestnet
+```
+
+### Chainlink Functions Configuration
+
+Before using Chainlink Functions, you need to set the following environment variables in your `.env` file:
+
+```
+# Chainlink Functions Configuration
+CHAINLINK_DON_ID=fun-base-sepolia
+CHAINLINK_SUBSCRIPTION_ID=your-subscription-id
+```
+
+For more information on creating a Chainlink Functions subscription and adding your contract as a consumer, see the [Chainlink Functions Setup Guide](README-CHAINLINK.md).
 

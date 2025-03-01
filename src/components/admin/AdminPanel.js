@@ -3,6 +3,7 @@ import { Card, Button, Form, ListGroup, Badge, Alert } from 'react-bootstrap';
 import { ethers } from 'ethers';
 import QuestionSetList from './QuestionSetList';
 import QuestionSetForm from './QuestionSetForm';
+import ChainlinkSetup from './ChainlinkSetup';
 
 const AdminPanel = ({ account, puzzlePoints, questionManager }) => {
   const [statusMessage, setStatusMessage] = useState(null);
@@ -24,6 +25,11 @@ const AdminPanel = ({ account, puzzlePoints, questionManager }) => {
         <QuestionSetForm 
           questionManager={questionManager} 
           onQuestionSetCreated={handleRefresh} 
+        />
+        
+        <ChainlinkSetup 
+          provider={questionManager?.provider}
+          questionManagerAddress={questionManager?.address}
         />
         
         <QuestionSetList 

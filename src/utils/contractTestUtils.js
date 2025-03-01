@@ -162,7 +162,7 @@ export async function checkVerifierSetup(questionManager, provider) {
     // Check source code
     let sourceCode = '';
     try {
-      sourceCode = await verifier.getEvaluationSource();
+      sourceCode = await verifier.evaluationSource();
       console.log(`Has source code: ${sourceCode.length > 0}`);
       if (sourceCode.length === 0) {
         console.error("Evaluation source code not set!");
